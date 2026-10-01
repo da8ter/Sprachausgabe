@@ -1,0 +1,39 @@
+{
+    "translations": {
+        "de": {
+            "Sprachausgabe Zentrale": "Sprachausgabe - Zentrale",
+            "Sprachausgabe Ansage": "Sprachausgabe - Ansage",
+            "Unknown action": "Unbekannte Aktion",
+            "Last announcement at": "Letzte Ansage um",
+            "Sent": "Gesendet",
+            "Failed": "Fehlgeschlagen",
+            "Condition could not be evaluated": "Bedingung konnte nicht ausgewertet werden",
+            "Volume": "Lautstärke",
+            "Announcements": "Sprachausgabe",
+            "Quiet mode": "Ruhemodus",
+            "Last announcement": "Letzte Ansage",
+            "%d outputs": "%d Ausgabegeräte",
+            "Output not found": "Ausgabegerät nicht gefunden",
+            "This is a test announcement.": "Das ist eine Testansage.",
+            "type:echo_speak": "Echo: sprechen",
+            "type:echo_announce": "Echo: Ankündigung mit Gong",
+            "type:fully": "Fully Kiosk Browser",
+            "type:script": "Eigenes Skript",
+            "Outputs": "Ausgabegeräte",
+            "Name / room": "Name / Raum",
+            "Type": "Art",
+            "Device": "Gerät",
+            "Script": "Skript",
+            "Default": "Standard",
+            "Script outputs receive $_IPS['TEXT'], $_IPS['VOLUME'] and $_IPS['TARGET'].": "Skript-Ausgaben bekommen $_IPS['TEXT'], $_IPS['VOLUME'] und $_IPS['TARGET'].",
+            "Global condition": "Globale Bedingung",
+            "Applies to every announcement except urgent ones, e.g. \"somebody is home\".": "Gilt für jede Ansage außer dringenden, z. B. „Jemand anwesend“.",
+            "Same announcement at most every": "Gleiche Ansage höchstens alle",
+            "Output": "Ausgabegerät",
+            "Test": "Testen",
+            "No output for announcement": "Kein Ausgabegerät für die Ansage",
+            "Announcement failed": "Ansage fehlgeschlagen",
+            "Unknown output": "Unbekanntes Ausgabegerät"
+        }
+    }
+}

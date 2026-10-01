@@ -1,0 +1,19 @@
+{
+    "id": "{8DF4B1D9-E589-452D-BE37-8EC5DEF4CF13}",
+    "name": "Sprachausgabe Zentrale",
+    "type": 2,
+    "vendor": "Stephan Sprick",
+    "aliases": [
+        "Text to Speech",
+        "TTS"
+    ],
+    "parentRequirements": [],
+    "childRequirements": [
+        "{5B0E2ABD-EF2A-4F45-812F-57558813CAF0}"
+    ],
+    "implemented": [
+        "{4942173C-5F03-4B89-835D-D3698A337C2D}"
+    ],
+    "prefix": "SPAZ",
+    "url": "https://github.com/da8ter/Sprachausgabe"
+}

@@ -1,0 +1,19 @@
+{
+    "id": "{94CE47EF-0417-49FB-9DE9-6B292F709A06}",
+    "name": "Sprachausgabe Ansage",
+    "type": 3,
+    "vendor": "Stephan Sprick",
+    "aliases": [
+        "Ansage",
+        "Announcement"
+    ],
+    "parentRequirements": [
+        "{4942173C-5F03-4B89-835D-D3698A337C2D}"
+    ],
+    "childRequirements": [],
+    "implemented": [
+        "{5B0E2ABD-EF2A-4F45-812F-57558813CAF0}"
+    ],
+    "prefix": "SPAA",
+    "url": "https://github.com/da8ter/Sprachausgabe"
+}

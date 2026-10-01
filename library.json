@@ -1,0 +1,12 @@
+{
+    "id": "{8C5028F8-5366-4533-A341-237EAE26A511}",
+    "author": "Stephan Sprick",
+    "name": "Sprachausgabe",
+    "url": "https://github.com/da8ter/Sprachausgabe",
+    "compatibility": {
+        "version": "8.1"
+    },
+    "version": "0.1",
+    "build": 1,
+    "date": 1790870400
+}
