@@ -185,6 +185,7 @@ class SprachausgabeZentrale extends IPSModuleStrict
                         ['caption' => 'Device', 'name' => 'instance', 'width' => '220px', 'add' => 0, 'edit' => ['type' => 'SelectInstance']],
                         ['caption' => 'Script', 'name' => 'script', 'width' => '200px', 'add' => 0, 'edit' => ['type' => 'SelectScript']],
                         ['caption' => 'Volume', 'name' => 'volume', 'width' => '90px', 'add' => 40, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 0, 'maximum' => 100, 'suffix' => ' %']],
+                        ['caption' => 'Volume variable', 'name' => 'volumeVar', 'width' => '200px', 'add' => 0, 'edit' => ['type' => 'SelectVariable']],
                         ['caption' => 'Default', 'name' => 'default', 'width' => '80px', 'add' => true, 'edit' => ['type' => 'CheckBox']],
                     ]],
                 ['type' => 'Label', 'caption' => 'Script outputs receive $_IPS[\'TEXT\'], $_IPS[\'VOLUME\'] and $_IPS[\'TARGET\']; "AI voice" outputs also $_IPS[\'AUDIO_URL\'] and $_IPS[\'AUDIO_FILE\'].'],
@@ -312,10 +313,12 @@ class SprachausgabeZentrale extends IPSModuleStrict
         return $out;
     }
 
-    /** Lautstärke: eigene der Ansage, sonst die des Geräts, beides mal dem globalen Faktor. */
+    /** Lautstärke: eigene der Ansage, sonst die des Geräts (Variable vor festem Wert), beides mal dem globalen Faktor. */
     private function volumeFor(array $output, int $requested): int
     {
-        $base = $requested > 0 ? $requested : (int)($output['volume'] ?? 0);
+        $volumeVar = (int)($output['volumeVar'] ?? 0);
+        $deviceVolume = $volumeVar > 0 && @IPS_VariableExists($volumeVar) ? (int)GetValue($volumeVar) : (int)($output['volume'] ?? 0);
+        $base = $requested > 0 ? $requested : $deviceVolume;
         if ($base <= 0) {
             return 0; // device keeps its own volume
         }

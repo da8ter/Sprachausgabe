@@ -107,6 +107,15 @@ Kernel::advance(1);
 check($taken() === [] && World::warningsLike('/./') === [] && count(World::logLines('/Unbekanntes Ausgabeger|Unknown output/')) >= 1,
     'und als Warnung geloggt, nicht gesprochen');
 
+$vv = IPS_CreateVariable(VARIABLETYPE_INTEGER);
+SetValue($vv, 60);
+IPS_SetProperty($hub, 'Outputs', json_encode(array_map(static fn(array $o): array => $o['name'] === 'Log' ? $o + ['volumeVar' => $vv] : $o,
+    json_decode(IPS_GetProperty($hub, 'Outputs'), true))));
+IPS_ApplyChanges($hub);
+SPAZ_Speak($hub, 'Variable', 'Log', 0);
+Kernel::advance(1);
+check(($taken()[0][3] ?? null) === 60, 'Lautstärke-Variable des Geräts schlägt den festen Wert');
+
 section('Ansage: Auslöser „Wert gleich“');
 $wm = IPS_CreateVariable(VARIABLETYPE_STRING);
 IPS_SetName($wm, 'Betriebsstatus');
