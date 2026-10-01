@@ -14,6 +14,7 @@ Ansagen für Symcon: ein Auslöser, eine Bedingung, ein Text, ein oder mehrere A
 ## 1. Funktionsumfang
 
 - **Ausgabegeräte:** Echo (sprechen oder Ankündigung mit Gong, über Echo Remote), Fully Kiosk Browser und eigene Skripte für jedes andere Gerät.
+- **KI-Stimme:** OpenAI, Microsoft Azure, ElevenLabs, Amazon Polly oder Google Gemini erzeugen eine Audiodatei; ein Skript bekommt `$_IPS['AUDIO_URL']` und `$_IPS['AUDIO_FILE']` und spielt sie auf Sonos, Media-Playern oder Ähnlichem ab. Jeder Text wird nur einmal erzeugt und bezahlt.
 - **Auslöser:** Variable bei Aktualisierung, Änderung, Wert gleich/ungleich, über/unter Grenzwert; zusätzlich täglich zu einer Uhrzeit.
 - **Bedingungen** mit Symcons eigenem Bedingungs-Editor: Anwesenheit, Zeitfenster, Wochentage, beliebige Variablen.
 - **Texte** mit Varianten (eine je Zeile, zufällig gewählt) und Platzhaltern: `{value}`, `{old}`, `{name}`, `{var:12345}`, `{time}`, `{date}`.
@@ -39,6 +40,8 @@ Ansagen für Symcon: ein Auslöser, eine Bedingung, ein Text, ein oder mehrere A
 
 **Eigenes Skript als Ausgabe:** Das Skript bekommt `$_IPS['TEXT']`, `$_IPS['VOLUME']` (0 = Gerätestandard) und `$_IPS['TARGET']` (Name des Ausgabegeräts).
 
+**Umstieg von eigenen Ansage-Skripten:** [tools/migrate_legacy.php](tools/migrate_legacy.php) übernimmt eine Kategorie mit Unterkategorien aus `switch`, `Zeitplan` und einem Skript mit festem Text und Auslöser-Ereignis. Als Skript-Inhalt ausführen; die Voreinstellung ist ein Probelauf, der nur einen Bericht ins Log schreibt. Mit `DRY_RUN = false` entstehen Zentrale und Ansagen, die alten Ereignisse werden deaktiviert, nicht gelöscht.
+
 ## 5. PHP-Befehle
 
 ```php
@@ -51,4 +54,4 @@ SPAA_Trigger(int $AnsageID): string
 
 ## 6. Versionshistorie
 
-- **0.1**: Erste Version: Zentrale mit Echo, Fully Kiosk und Skript-Ausgabe, Warteschlange und Sperrfrist; Ansage mit Variablen- und Zeitauslöser, Bedingung, Textvarianten und Platzhaltern. Rauchtest [tests/smoke_test.php](tests/smoke_test.php) (nutzt den Prüfstand-Kernel aus `modules/LGThinQ`).
+- **0.1**: Erste Version: Zentrale mit Echo, Fully Kiosk, Skript-Ausgabe und KI-Stimme (OpenAI, Azure, ElevenLabs, Amazon Polly, Google Gemini; Audiodatei über den Webhook `/hook/sprachausgabe`), Lautstärke-Variable je Gerät, Warteschlange und Sperrfrist; Ansage mit Variablen- und Zeitauslöser, Bedingung, Textvarianten und Platzhaltern. Rauchtest [tests/smoke_test.php](tests/smoke_test.php) (nutzt den Prüfstand-Kernel aus `modules/LGThinQ`).
