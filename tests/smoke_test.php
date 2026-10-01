@@ -228,7 +228,7 @@ IPS_SetProperty($hub2, 'AiOpenAIKey', 'sk-test');
 IPS_SetProperty($hub2, 'AiBaseUrl', 'http://192.168.0.6:3777/');
 IPS_SetProperty($hub2, 'Cooldown', 0);
 IPS_ApplyChanges($hub2);
-check(isset(Kernel::$instances[$hub2]['hooks']['/hook/sprachausgabe']), 'Webhook /hook/sprachausgabe registriert');
+check(isset(Kernel::$instances[$hub2]['hooks']['sprachausgabe']), 'Webhook /hook/sprachausgabe registriert');
 $GLOBALS['http'] = [];
 $GLOBALS['calls'] = [];
 SPAZ_Speak($hub2, 'Die Waschmaschine ist fertig.', '', 0);

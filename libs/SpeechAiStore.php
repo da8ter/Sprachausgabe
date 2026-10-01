@@ -12,7 +12,8 @@ require_once __DIR__ . '/SpeechAi.php';
  */
 trait SpeechAiStore
 {
-    private const AI_HOOK = '/hook/sprachausgabe';
+    /** Symcons RegisterHook nimmt den Namen OHNE /hook/; die Adresse ist /hook/<Name>. */
+    private const AI_HOOK = 'sprachausgabe';
     private const AI_CACHE_MAX = 300;
 
     /** @var array<int, string> Eigenschaft → Schlüssel in SpeechAi */
@@ -72,7 +73,7 @@ trait SpeechAiStore
         } else {
             @touch($file); // keeps it at the front of the cache
         }
-        return ['url' => $this->aiBaseUrl() . self::AI_HOOK . '/' . $name, 'file' => $file, 'error' => ''];
+        return ['url' => $this->aiBaseUrl() . '/hook/' . self::AI_HOOK . '/' . $name, 'file' => $file, 'error' => ''];
     }
 
     /** Webhook: liefert eine Datei des Zwischenspeichers aus. */
