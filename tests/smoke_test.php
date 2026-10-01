@@ -24,7 +24,8 @@ function ECHOREMOTE_TextToSpeechVolume(int $id, string $tts, int $vol): bool { $
 function ECHOREMOTE_Announcement(int $id, string $tts): bool { $GLOBALS['calls'][] = ['announce', $id, $tts, 0]; return true; }
 function FKB_textToSpeech(int $id, string $tts): bool { $GLOBALS['calls'][] = ['fully', $id, $tts, 0]; return true; }
 function IPS_ScriptExists(int $id): bool { return isset($GLOBALS['scripts'][$id]); }
-function IPS_RunScriptEx(int $id, array $params): bool { $GLOBALS['calls'][] = ['script', $id, $params['TEXT'], (int)$params['VOLUME'], $params['TARGET']]; return true; }
+function IPS_RunScriptEx(int $id, array $params): bool { $GLOBALS['lastScriptParams'] = $params; $GLOBALS['calls'][] = ['script', $id, $params['TEXT'], (int)$params['VOLUME'], $params['TARGET']]; return true; }
+function IPS_GetOption(string $o): mixed { return $o === 'ScriptOutputBufferLimit' ? 1048576 : 0; }
 function IPS_IsConditionPassing(string $c): bool { return $GLOBALS['conditions'][$c] ?? true; }
 function GetValueFormatted(int $id): string
 {
@@ -178,6 +179,87 @@ check(is_array($targets) && array_column($targets['values'], 'name') === ['Küch
     && $targets['values'][2]['use'] === true && $targets['columns'][0]['save'] === true,
     'Zielliste aus den Geräten der Zentrale, Häkchen übernommen, Namensspalte mit save');
 check(is_array(json_decode(Kernel::$instances[$hub]["object"]->GetConfigurationForm(), true)), 'Formular der Zentrale ist gültiges JSON');
+
+section('KI-Stimme: alle fünf Anbieter (Netz als Attrappe)');
+$GLOBALS['http'] = [];
+$GLOBALS['httpAnswer'] = null;
+SpeechAi::$transport = static function (string $url, array $headers, string $body): array {
+    $GLOBALS['http'][] = ['url' => $url, 'headers' => $headers, 'body' => $body];
+    if ($GLOBALS['httpAnswer'] !== null) {
+        return $GLOBALS['httpAnswer'];
+    }
+    if (str_contains($url, 'generativelanguage')) {
+        return ['status' => 200, 'body' => json_encode(['steps' => [['type' => 'model_output', 'content' => [['type' => 'audio', 'data' => base64_encode(str_repeat("\0", 64)), 'mime_type' => 'audio/L16;rate=24000']]]]]), 'err' => ''];
+    }
+    return ['status' => 200, 'body' => 'ID3' . str_repeat('x', 200), 'err' => ''];
+};
+$cases = [
+    'openai' => [['openai_key' => 'sk-test'], 'api.openai.com/v1/audio/speech', 'Authorization: Bearer sk-test', 'mp3'],
+    'azure' => [['azure_key' => 'az', 'azure_region' => 'westeurope'], 'westeurope.tts.speech.microsoft.com', 'Ocp-Apim-Subscription-Key: az', 'mp3'],
+    'elevenlabs' => [['eleven_key' => 'el'], 'api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM?output_format=mp3_44100_64', 'xi-api-key: el', 'mp3'],
+    'polly' => [['polly_key' => str_repeat('A', 20), 'polly_secret' => str_repeat('s', 40)], 'polly.eu-central-1.amazonaws.com/v1/speech', 'Authorization: AWS4-HMAC-SHA256', 'mp3'],
+    'gemini' => [['gemini_key' => 'gm'], 'generativelanguage.googleapis.com/v1beta/interactions', 'x-goog-api-key: gm', 'wav'],
+];
+foreach ($cases as $provider => [$cfg, $urlPart, $headerPart, $format]) {
+    $GLOBALS['http'] = [];
+    $ai = new SpeechAi(['provider' => $provider] + $cfg);
+    $r = $ai->synthesize('Hallo & Tschüss');
+    $call = $GLOBALS['http'][0] ?? ['url' => '', 'headers' => [], 'body' => ''];
+    $hdr = implode("\n", $call['headers']);
+    check($r['error'] === '' && $r['audio'] !== '' && str_contains($call['url'], $urlPart) && str_contains($hdr, $headerPart) && $ai->format() === $format,
+        "$provider: Adresse, Schlüssel im Kopf, Format $format" . ($r['error'] !== '' ? ' — ' . $r['error'] : ''));
+}
+check(str_contains((new SpeechAi(['provider' => 'azure', 'azure_key' => 'k']))->synthesize('A & B') ? $GLOBALS['http'][count($GLOBALS['http']) - 1]['body'] : '', 'A &amp; B'), 'Azure: Text im SSML maskiert');
+check(str_starts_with((new SpeechAi(['provider' => 'gemini', 'gemini_key' => 'k']))->synthesize('x')['audio'], 'RIFF'), 'Gemini: rohes PCM bekommt einen WAV-Kopf');
+check((new SpeechAi(['provider' => 'openai']))->missing() === 'OpenAI key missing' && (new SpeechAi([]))->missing() !== '', 'fehlender Schlüssel wird benannt, kein Aufruf');
+$GLOBALS['httpAnswer'] = ['status' => 401, 'body' => '{"error":"invalid key"}', 'err' => ''];
+$r = (new SpeechAi(['provider' => 'elevenlabs', 'eleven_key' => 'x']))->synthesize('x');
+check($r['audio'] === '' && str_contains($r['error'], '401'), 'Fehlerantwort des Anbieters wird gemeldet: ' . $r['error']);
+$GLOBALS['httpAnswer'] = ['status' => 200, 'body' => '{"oops":1}', 'err' => ''];
+check(str_contains((new SpeechAi(['provider' => 'openai', 'openai_key' => 'x']))->synthesize('x')['error'], 'expected audio'), 'JSON mit Status 200 ist keine Tondatei');
+$GLOBALS['httpAnswer'] = null;
+
+section('KI-Stimme in der Zentrale: Zwischenspeicher, Skript-Ausgabe, Webhook');
+$GLOBALS['scripts'][50002] = true;
+$hub2 = Kernel::createInstance(HUB);
+IPS_SetProperty($hub2, 'Outputs', json_encode([['name' => 'Sonos', 'type' => 'ai_script', 'instance' => 0, 'script' => 50002, 'volume' => 30, 'default' => true]]));
+IPS_SetProperty($hub2, 'AiProvider', 'openai');
+IPS_SetProperty($hub2, 'AiOpenAIKey', 'sk-test');
+IPS_SetProperty($hub2, 'AiBaseUrl', 'http://192.168.0.6:3777/');
+IPS_SetProperty($hub2, 'Cooldown', 0);
+IPS_ApplyChanges($hub2);
+check(isset(Kernel::$instances[$hub2]['hooks']['/hook/sprachausgabe']), 'Webhook /hook/sprachausgabe registriert');
+$GLOBALS['http'] = [];
+$GLOBALS['calls'] = [];
+SPAZ_Speak($hub2, 'Die Waschmaschine ist fertig.', '', 0);
+Kernel::advance(1);
+$call = $GLOBALS['calls'][0] ?? [];
+check(($call[0] ?? '') === 'script' && count($GLOBALS['http']) === 1, 'eine Aufnahme erzeugt, Skript aufgerufen');
+$params = $GLOBALS['lastScriptParams'] ?? [];
+check(preg_match('#^http://192\.168\.0\.6:3777/hook/sprachausgabe/[a-f0-9]{64}\.mp3$#', (string)($params['AUDIO_URL'] ?? '')) === 1 && is_file((string)($params['AUDIO_FILE'] ?? '')),
+    'Skript bekommt AUDIO_URL und AUDIO_FILE: ' . ($params['AUDIO_URL'] ?? ''));
+SPAZ_Speak($hub2, 'Die Waschmaschine ist fertig.', '', 0);
+Kernel::advance(5);
+check(count($GLOBALS['http']) === 1, 'gleicher Text: aus dem Zwischenspeicher, kein zweiter Abruf');
+$_SERVER['REQUEST_URI'] = parse_url((string)$params['AUDIO_URL'], PHP_URL_PATH);
+$hook = new ReflectionMethod(Kernel::$instances[$hub2]['object'], 'ProcessHookData');
+ob_start();
+@$hook->invoke(Kernel::$instances[$hub2]["object"]); // headers cannot be sent on the CLI
+$served = (string)ob_get_clean();
+check($served === file_get_contents((string)$params['AUDIO_FILE']), 'Webhook liefert die Datei aus');
+$_SERVER['REQUEST_URI'] = '/hook/sprachausgabe/../../settings.json';
+ob_start();
+@$hook->invoke(Kernel::$instances[$hub2]["object"]); // headers cannot be sent on the CLI
+check(trim((string)ob_get_clean()) === 'Not found', 'Webhook liefert nur Kennungen aus dem Zwischenspeicher (kein Pfad-Ausbruch)');
+IPS_SetProperty($hub2, 'AiOpenAIKey', '');
+IPS_ApplyChanges($hub2);
+$GLOBALS['calls'] = [];
+SPAZ_Speak($hub2, 'Ohne Schlüssel', '', 0);
+Kernel::advance(1);
+check($GLOBALS['calls'] === [] && count(World::logLines('/OpenAI key missing/')) >= 1, 'ohne Schlüssel: Skript nicht aufgerufen, Grund im Log');
+foreach (glob(IPS_GetKernelDir() . 'media/sprachausgabe_' . $hub2 . '/*') ?: [] as $f) { @unlink($f); }
+$form = json_decode(Kernel::$instances[$hub2]['object']->GetConfigurationForm(), true);
+check(is_array($form) && str_contains(json_encode($form), 'AiElevenKey') && str_contains(json_encode($form), 'AiPollySecret'), 'Formular enthält alle Anbieter');
 
 check(Kernel::$warnings === [], 'keine PHP-Warnungen' . (Kernel::$warnings === [] ? '' : ': ' . implode(' | ', Kernel::$warnings)));
 check(World::logLines('/ERROR/') === [], 'keine Fehler im Log' . (World::logLines('/ERROR/') === [] ? '' : ': ' . implode(' | ', World::logLines('/ERROR/'))));

@@ -13,11 +13,12 @@ final class SpeechOutputs
     public const ECHO_ANNOUNCE = 'echo_announce';
     public const FULLY = 'fully';
     public const SCRIPT = 'script';
+    public const AI_SCRIPT = 'ai_script';
 
     /** @return array<int, string> */
     public static function types(): array
     {
-        return [self::ECHO_SPEAK, self::ECHO_ANNOUNCE, self::FULLY, self::SCRIPT];
+        return [self::ECHO_SPEAK, self::ECHO_ANNOUNCE, self::FULLY, self::SCRIPT, self::AI_SCRIPT];
     }
 
     /**
@@ -50,15 +51,21 @@ final class SpeechOutputs
                 }
                 return self::call('FKB_textToSpeech', [$instance, $text]);
             case self::SCRIPT:
+            case self::AI_SCRIPT:
                 $script = (int)($output['script'] ?? 0);
                 if ($script <= 0 || !@IPS_ScriptExists($script)) {
                     return 'no script selected';
                 }
+                $audio = (array)($output['audio'] ?? []);
+                if ($type === self::AI_SCRIPT && (string)($audio['error'] ?? 'no AI audio') !== '') {
+                    return 'AI voice: ' . (string)($audio['error'] ?? 'no AI audio'); // the script plays a file; without one it has nothing to do
+                }
                 IPS_RunScriptEx($script, [
-                    'TEXT'      => $text,
-                    'VOLUME'    => (string)$volume,
-                    'TARGET'    => (string)($output['name'] ?? ''),
-                    'AUDIO_URL' => ''
+                    'TEXT'       => $text,
+                    'VOLUME'     => (string)$volume,
+                    'TARGET'     => (string)($output['name'] ?? ''),
+                    'AUDIO_URL'  => (string)($audio['url'] ?? ''),
+                    'AUDIO_FILE' => (string)($audio['file'] ?? ''),
                 ]);
                 return '';
         }

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../libs/SpeechOutputs.php';
+require_once __DIR__ . '/../libs/SpeechAiStore.php';
 
 /**
  * Sprachausgabe Zentrale: kennt die Ausgabegeräte, die globalen Schalter (Hauptschalter,
@@ -12,6 +13,8 @@ require_once __DIR__ . '/../libs/SpeechOutputs.php';
  */
 class SprachausgabeZentrale extends IPSModuleStrict
 {
+    use SpeechAiStore;
+
     private const DATA_TX = '{4942173C-5F03-4B89-835D-D3698A337C2D}';
     private const QUEUE_MAX = 20;
 
@@ -25,6 +28,7 @@ class SprachausgabeZentrale extends IPSModuleStrict
         $this->RegisterAttributeString('Recent', '{}');
         $this->RegisterAttributeBoolean('Initialized', false);
         $this->RegisterTimer('Process', 0, 'SPAZ_ProcessQueue($_IPS[\'TARGET\']);');
+        $this->aiRegister();
 
         $this->RegisterVariableBoolean('MASTER', $this->Translate('Announcements'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_SWITCH,
@@ -157,7 +161,11 @@ class SprachausgabeZentrale extends IPSModuleStrict
             echo $this->Translate('Output not found');
             return;
         }
-        $error = SpeechOutputs::speak($output, $this->Translate('This is a test announcement.'), $this->volumeFor($output, 0));
+        $text = $this->Translate('This is a test announcement.');
+        if (($output['type'] ?? '') === SpeechOutputs::AI_SCRIPT) {
+            $output['audio'] = $this->aiAudio($text);
+        }
+        $error = SpeechOutputs::speak($output, $text, $this->volumeFor($output, 0));
         echo $error === '' ? $this->Translate('Sent') : $this->Translate('Failed') . ': ' . $error;
     }
 
@@ -179,11 +187,12 @@ class SprachausgabeZentrale extends IPSModuleStrict
                         ['caption' => 'Volume', 'name' => 'volume', 'width' => '90px', 'add' => 40, 'edit' => ['type' => 'NumberSpinner', 'minimum' => 0, 'maximum' => 100, 'suffix' => ' %']],
                         ['caption' => 'Default', 'name' => 'default', 'width' => '80px', 'add' => true, 'edit' => ['type' => 'CheckBox']],
                     ]],
-                ['type' => 'Label', 'caption' => 'Script outputs receive $_IPS[\'TEXT\'], $_IPS[\'VOLUME\'] and $_IPS[\'TARGET\'].'],
+                ['type' => 'Label', 'caption' => 'Script outputs receive $_IPS[\'TEXT\'], $_IPS[\'VOLUME\'] and $_IPS[\'TARGET\']; "AI voice" outputs also $_IPS[\'AUDIO_URL\'] and $_IPS[\'AUDIO_FILE\'].'],
                 ['type' => 'ExpansionPanel', 'caption' => 'Global condition', 'items' => [
                     ['type' => 'Label', 'caption' => 'Applies to every announcement except urgent ones, e.g. "somebody is home".'],
                     ['type' => 'SelectCondition', 'name' => 'Condition', 'multi' => true],
                 ]],
+                $this->aiFormPanel(),
                 ['type' => 'NumberSpinner', 'name' => 'Cooldown', 'caption' => 'Same announcement at most every', 'suffix' => ' s', 'minimum' => 0],
             ],
             'actions' => [
@@ -248,7 +257,12 @@ class SprachausgabeZentrale extends IPSModuleStrict
             $this->LogMessage(sprintf('%s: %s', $this->Translate('No output for announcement'), $text), KL_WARNING);
             return;
         }
+        $audio = null;
         foreach ($outputs as $output) {
+            if (($output['type'] ?? '') === SpeechOutputs::AI_SCRIPT) {
+                $audio ??= $this->aiAudio($text); // one recording for every AI output of this announcement
+                $output['audio'] = $audio;
+            }
             $error = SpeechOutputs::speak($output, $text, $this->volumeFor($output, (int)($item['volume'] ?? 0)));
             if ($error !== '') {
                 $this->LogMessage(sprintf('%s (%s): %s', $this->Translate('Announcement failed'), (string)$output['name'], $error), KL_WARNING);
