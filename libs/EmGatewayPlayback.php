@@ -12,7 +12,7 @@ trait EmGatewayPlayback
     // ------------------------------------------------------------------ Wiedergabe
 
     /** Hängt Ton an die Wiedergabe des Geräts an; den Rest übernimmt der Pump-Timer. */
-    private function queuePcm(string $id, string $pcm): string
+    private function queuePcm(string $id, string $pcm, bool $open = false): string
     {
         if ($this->dataConnection($id) === null) {
             return 'device has no audio connection';
@@ -23,8 +23,9 @@ trait EmGatewayPlayback
             $play[$id]['pcm'] = base64_encode(substr($rest, (int)$play[$id]['pos']) . $pcm);
             $play[$id]['sentBase'] = (float)$play[$id]['sent'];
             $play[$id]['pos'] = 0;
+            $play[$id]['open'] = $open || !empty($play[$id]['open']);
         } else {
-            $play[$id] = ['pcm' => base64_encode($pcm), 'pos' => 0, 'start' => EmClock::now(), 'sent' => 0.0, 'sentBase' => 0.0];
+            $play[$id] = ['pcm' => base64_encode($pcm), 'pos' => 0, 'start' => EmClock::now(), 'sent' => 0.0, 'sentBase' => 0.0, 'open' => $open];
         }
         $this->savePlays($play);
         $this->pumpDevices();
@@ -55,6 +56,11 @@ trait EmGatewayPlayback
             $pos = (int)$p['pos'];
             $sent = (float)$p['sent'];
             $elapsed = EmClock::now() - (float)$p['start'];
+            if ($sent < $elapsed) { // Unterlauf (die Antwort kam langsamer als sie gespielt wird): Zählung neu ansetzen, sonst entfällt die Bremse
+                $p['start'] = EmClock::now() - $sent;
+                $play[$id]['start'] = $p['start'];
+                $elapsed = $sent;
+            }
             $out = '';
             while ($pos < $len && $sent - $elapsed < EmPcm::LEAD_SECONDS) {
                 $chunk = substr($pcm, $pos, EmPcm::PERIOD_BYTES);
@@ -65,7 +71,10 @@ trait EmGatewayPlayback
                 $pos += EmPcm::PERIOD_BYTES;
                 $sent += EmPcm::PERIOD_SECONDS;
             }
-            if ($pos >= $len) {
+            if ($pos >= $len && !empty($p['open'])) {
+                $play[$id]['pos'] = $pos; // die Antwort wird noch erzeugt: kein Ende, weiter warten
+                $play[$id]['sent'] = $sent;
+            } elseif ($pos >= $len) {
                 $out .= EmWebSocket::binary(EmProtocol::speakerEnd());
                 unset($play[$id]);
             } else {
@@ -77,5 +86,27 @@ trait EmGatewayPlayback
             }
         }
         $this->savePlays($play);
+    }
+
+    /** Die Antwort ist vollständig: nach dem restlichen Ton folgt das Ende. */
+    private function endStream(string $id): void
+    {
+        $play = $this->plays();
+        if (isset($play[$id])) {
+            $play[$id]['open'] = false;
+            $this->savePlays($play);
+            $this->pumpDevices();
+        }
+    }
+
+    /** Wiedergabe sofort abbrechen (Barge-in oder neue Sprachrunde). */
+    private function flushPlayback(string $id): void
+    {
+        $play = $this->plays();
+        if (isset($play[$id])) {
+            unset($play[$id]);
+            $this->savePlays($play);
+            $this->sendControl($id, EmProtocol::speakerFlush());
+        }
     }
 }

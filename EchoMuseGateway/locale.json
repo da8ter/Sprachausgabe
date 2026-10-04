@@ -8,7 +8,11 @@
             "Accept every device without asking (home network only)": "Accept every device without asking (home network only)",
             "No device connected.": "No device connected.",
             "Waiting for approval": "Waiting for approval",
-            "Approve": "Approve"
+            "Approve": "Approve",
+            "Voice command": "Voice command",
+            "Voice microphone signal": "Voice microphone signal",
+            "EchoMuse Voice (empty = no voice conversations)": "EchoMuse Voice (empty = no voice conversations)",
+            "Play a short sound when the wake word is heard": "Play a short sound when the wake word is heard"
         },
         "de": {
             "EchoMuse Gateway": "EchoMuse - Gateway",
@@ -18,7 +22,11 @@
             "Accept every device without asking (home network only)": "Jedes Gerät ohne Nachfrage annehmen (nur im Heimnetz)",
             "No device connected.": "Kein Gerät verbunden.",
             "Waiting for approval": "Wartet auf Freigabe",
-            "Approve": "Freigeben"
+            "Approve": "Freigeben",
+            "Voice command": "Sprachbefehl",
+            "Voice microphone signal": "Sprach-Mikrofonsignal",
+            "EchoMuse Voice (empty = no voice conversations)": "EchoMuse Voice (leer = keine Sprachgespräche)",
+            "Play a short sound when the wake word is heard": "Kurzen Ton spielen, wenn das Wakeword erkannt wurde"
         }
     }
 }

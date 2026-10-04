@@ -6,6 +6,9 @@ declare(strict_types=1);
 require __DIR__ . '/../libs/EmWebSocket.php';
 require __DIR__ . '/../libs/EmProtocol.php';
 require __DIR__ . '/../libs/EmPcm.php';
+require __DIR__ . '/../libs/EmWsClient.php';
+require __DIR__ . '/../libs/EmRealtime.php';
+require __DIR__ . '/../libs/SymDoVoiceClient.php';
 
 $n = 0;
 $fail = 0;
@@ -94,6 +97,65 @@ check(strlen($pcm) === 48000 && count($periods) === 12 && strlen($periods[11]) =
 check(abs(EmPcm::seconds($pcm) - 0.5) < 1e-9 && abs(EmPcm::PERIOD_SECONDS * 1000 - 42.667) < 0.01, 'Dauer und Periodenlänge (42,7 ms)');
 $samples = array_values(unpack('s*', $pcm));
 check(max($samples) <= 9830 && max($samples) > 9000 && abs($samples[0]) < 50, 'Sinuston mit Amplitude 0,3 und sanftem Einsatz');
+
+section('WebSocket als Client');
+$key = 'dGhlIHNhbXBsZSBub25jZQ==';
+$rq = EmWsClient::request('api.openai.com', '/v1/realtime?model=gpt-realtime-mini', $key, ['Authorization' => 'Bearer ek_x', "Bad\r\nHeader" => 'x', 'X-Evil' => "a\r\nInjected: 1"]);
+check(str_starts_with($rq, "GET /v1/realtime?model=gpt-realtime-mini HTTP/1.1\r\nHost: api.openai.com\r\n") && str_contains($rq, "Authorization: Bearer ek_x\r\n") && !str_contains($rq, 'Injected') && !str_contains($rq, 'Bad'), 'Anfrage mit Kopfzeilen, Einschleusen von Zeilen verhindert');
+$resp = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n" . EmWebSocket::text('{"type":"session.created"}');
+$pr = EmWsClient::parseResponse($resp);
+check($pr !== null && $pr['status'] === 101 && EmWsClient::accepted($pr['status'], $pr['headers'], $key) && !EmWsClient::accepted(101, ['sec-websocket-accept' => 'falsch'], $key), 'Antwort 101, Accept-Schlüssel geprüft');
+$d = EmWebSocket::decode($pr['rest'], '', 0, false);
+check(count($d['messages']) === 1 && $d['messages'][0]['data'] === '{"type":"session.created"}', 'unmaskierter Server-Rahmen hinter der Antwort');
+check(EmWsClient::parseResponse("HTTP/1.1 101 Sw") === null && EmWsClient::parseResponse("HTTP/1.1 401 Unauthorized\r\n\r\n")['status'] === 401, 'unvollständige Antwort, Fehlerstatus');
+$up = EmWebSocket::decode(EmWsClient::text('hi') . EmWsClient::pong('p') . EmWsClient::close(1000));
+check(count($up['messages']) === 3 && $up['messages'][0]['data'] === 'hi', 'Rahmen nach oben sind maskiert und lesbar');
+
+section('Realtime-Ereignisse');
+check(json_decode(EmRealtime::appendAudio("\x01\x02"), true) === ['type' => 'input_audio_buffer.append', 'audio' => 'AQI='], 'Audio anhängen');
+$out = json_decode(EmRealtime::functionOutput('call_1', '{"ok":true}'), true);
+check($out['type'] === 'conversation.item.create' && $out['item'] === ['type' => 'function_call_output', 'call_id' => 'call_1', 'output' => '{"ok":true}'], 'Werkzeugergebnis an das Modell');
+check(EmRealtime::path('gpt-realtime-mini') === '/v1/realtime?model=gpt-realtime-mini' && EmRealtime::headers('ek')['Authorization'] === 'Bearer ek', 'Pfad und Autorisierung');
+foreach (['response.output_audio.delta', 'response.audio.delta'] as $t) {
+    $e = EmRealtime::parseEvent(json_encode(['type' => $t, 'delta' => base64_encode("\x10\x00\x20\x00")]));
+    check($e['kind'] === 'audio' && $e['pcm24k'] === "\x10\x00\x20\x00", "Audio-Ereignis $t");
+}
+check(EmRealtime::parseEvent('{"type":"input_audio_buffer.speech_stopped"}')['kind'] === 'speech_stopped' && EmRealtime::parseEvent('{"type":"input_audio_buffer.speech_started"}')['kind'] === 'speech_started', 'Sprechbeginn und Sprechende');
+$t = EmRealtime::parseEvent('{"type":"response.function_call_arguments.done","name":"einkauf_hinzu","arguments":"{\"artikel\":\"Milch\"}","call_id":"call_9"}');
+check($t === ['kind' => 'tool', 'name' => 'einkauf_hinzu', 'args' => '{"artikel":"Milch"}', 'callId' => 'call_9'], 'Werkzeugaufruf');
+$dn = EmRealtime::parseEvent('{"type":"response.done","response":{"status":"completed","output":[{"type":"function_call","name":"x","arguments":"{}","call_id":"c1"},{"type":"message"}]}}');
+check($dn['kind'] === 'done' && $dn['status'] === 'completed' && count($dn['tools']) === 1 && $dn['tools'][0]['callId'] === 'c1', 'response.done mit Werkzeugaufruf im Ausgang');
+check(EmRealtime::parseEvent('{"type":"error","error":{"message":"Invalid token","code":"invalid_api_key"}}') === ['kind' => 'error', 'message' => 'Invalid token', 'code' => 'invalid_api_key'], 'Fehler');
+check(EmRealtime::parseEvent('kaputt')['kind'] === 'other' && EmRealtime::parseEvent('{"type":"rate_limits.updated"}')['kind'] === 'other' && EmRealtime::parseEvent('{"type":"response.audio.delta","delta":"!!!"}')['kind'] === 'other', 'Unbekanntes und Kaputtes wird ignoriert');
+check(EmRealtime::parseEvent('{"type":"conversation.item.input_audio_transcription.completed","transcript":"Hallo"}') === ['kind' => 'transcript', 'role' => 'user', 'text' => 'Hallo'], 'Mitschrift des Gesagten');
+
+section('SymDo-Sprachweg');
+$calls = [];
+$fake = static function (string $url, array $headers, string $body) use (&$calls): array {
+    $calls[] = ['url' => $url, 'auth' => $headers[0] ?? '', 'body' => json_decode($body, true)];
+    $a = json_decode($body, true)['action'];
+    $resp = match ($a) {
+        'open' => ['ok' => true, 'value' => 'ek_secret', 'model' => 'gpt-realtime-mini', 'sessionSeconds' => 90, 'ttl' => 60],
+        'tool' => ['ok' => true, 'ergebnis' => 'Milch steht auf der Liste'],
+        default => ['ok' => true],
+    };
+    return ['status' => 200, 'body' => json_encode($resp), 'err' => ''];
+};
+$sd = new SymDoVoiceClient('http://127.0.0.1:3777/hook/lists/app/', 'tok123', $fake);
+check($sd->configured() && !(new SymDoVoiceClient('ftp://x', 'a'))->configured() && !(new SymDoVoiceClient('http://x', ''))->configured(), 'konfiguriert nur mit Adresse und Token');
+$o = $sd->open('u1', 77);
+check($o['ok'] && $o['value'] === 'ek_secret' && $o['model'] === 'gpt-realtime-mini' && $calls[0]['url'] === 'http://127.0.0.1:3777/hook/lists/app/v1/voice' && $calls[0]['auth'] === 'Authorization: Bearer tok123' && $calls[0]['body'] === ['action' => 'open', 'tile' => 77, 'userId' => 'u1'], 'open: Adresse, Bearer, Nutzlast, Schlüssel');
+check($sd->opened('echo-1', 'u1', 77) && $calls[1]['body']['action'] === 'opened', 'opened');
+$t = $sd->tool('echo-1', 'u1', 'einkauf_hinzu', '{"artikel":"Milch"}', 'call_9');
+check($t['ergebnis'] === 'Milch steht auf der Liste' && $calls[2]['body'] === ['action' => 'tool', 'callId' => 'echo-1', 'userId' => 'u1', 'name' => 'einkauf_hinzu', 'arguments' => '{"artikel":"Milch"}', 'fnId' => 'call_9'], 'tool: Name, Argumente, fnId');
+$sd->close('echo-1');
+check($calls[3]['body']['action'] === 'close', 'close');
+$live = new SymDoVoiceClient('http://x', 't', static fn(): array => ['status' => 200, 'body' => '{"ok":true,"live":true}', 'err' => '']);
+check(str_contains($live->open('u', 1)['error'], 'GPT-Live'), 'GPT-Live (WebRTC) wird erkannt und erklärt');
+$no = new SymDoVoiceClient('http://x', 't', static fn(): array => ['status' => 200, 'body' => '{"ok":false,"error":{"code":"voice_quota","message":"The daily talk time is used up."}}', 'err' => '']);
+check($no->open('u', 1) === ['ok' => false, 'error' => 'The daily talk time is used up.'], 'Tagesbudget aufgebraucht wird weitergereicht');
+$bad = new SymDoVoiceClient('http://x', 't', static fn(): array => ['status' => 0, 'body' => '', 'err' => 'Connection refused']);
+check($bad->open('u', 1) === ['ok' => false, 'error' => 'Connection refused'] && ($bad->tool('c', 'u', 'n', '{}', 'f')['ok'] ?? true) === false, 'Netzfehler wird gemeldet');
 
 echo "\n" . ($fail === 0 ? "Alle $n Prüfungen bestanden." : "$fail von $n Prüfungen fehlgeschlagen.") . "\n";
 exit($fail === 0 ? 0 : 1);

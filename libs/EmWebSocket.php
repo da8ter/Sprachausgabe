@@ -118,10 +118,11 @@ final class EmWebSocket
      * @param string $buffer     Bytes seit dem letzten Aufruf, die noch nicht verarbeitet sind
      * @param string $partial    bereits empfangene Teile einer fragmentierten Nachricht
      * @param int    $partialOp  Opcode dieser Nachricht (0 = keine offen)
+     * @param bool   $requireMask true auf der Serverseite (Clients maskieren); false für Rahmen eines Servers an uns als Client
      * @return array{messages: array<int, array{op: int, data: string}>, buffer: string, partial: string, partialOp: int}
      * @throws \InvalidArgumentException bei Protokollverstoß (nicht maskiert, zu groß, ungültiger Opcode)
      */
-    public static function decode(string $buffer, string $partial = '', int $partialOp = 0): array
+    public static function decode(string $buffer, string $partial = '', int $partialOp = 0, bool $requireMask = true): array
     {
         $messages = [];
         while (strlen($buffer) >= 2) {
@@ -145,19 +146,20 @@ final class EmWebSocket
                 $len = (int)unpack('J', substr($buffer, 2, 8))[1];
                 $offset = 10;
             }
-            if (!$masked) {
+            if ($requireMask && !$masked) {
                 throw new \InvalidArgumentException('client frame is not masked');
             }
             if ($len < 0 || $len > self::MAX_MESSAGE) {
                 throw new \InvalidArgumentException('frame too large');
             }
-            if (strlen($buffer) < $offset + 4 + $len) {
+            $maskLen = $masked ? 4 : 0;
+            if (strlen($buffer) < $offset + $maskLen + $len) {
                 break;
             }
-            $mask = substr($buffer, $offset, 4);
-            $payload = substr($buffer, $offset + 4, $len);
-            $buffer = (string)substr($buffer, $offset + 4 + $len);
-            $payload = self::unmask($payload, $mask);
+            $mask = $masked ? substr($buffer, $offset, 4) : '';
+            $payload = substr($buffer, $offset + $maskLen, $len);
+            $buffer = (string)substr($buffer, $offset + $maskLen + $len);
+            $payload = $masked ? self::unmask($payload, $mask) : $payload;
 
             if ($op >= 0x8) { // Steuerrahmen: nie fragmentiert, mitten in einer Nachricht erlaubt
                 if (!$fin || $len > 125 || !in_array($op, [self::OP_CLOSE, self::OP_PING, self::OP_PONG], true)) {

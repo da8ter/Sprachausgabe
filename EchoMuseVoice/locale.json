@@ -1,0 +1,48 @@
+{
+    "translations": {
+        "en": {
+            "EchoMuse Voice": "EchoMuse - Voice",
+            "Event for the gateway": "Event for the gateway",
+            "State": "State",
+            "Last request": "Last request",
+            "connecting": "connecting",
+            "listening": "listening",
+            "idle": "idle",
+            "Voice session not opened": "Voice session not opened",
+            "Realtime connection refused": "Realtime connection refused",
+            "Realtime error": "Realtime error",
+            "SymDo address (hook of the SymDo Gateway)": "SymDo address (hook of the SymDo Gateway)",
+            "SymDo access token": "SymDo access token",
+            "SymDo user ID (whose lists and appointments the voice uses)": "SymDo user ID (whose lists and appointments the voice uses)",
+            "EchoMuse Gateway": "EchoMuse Gateway",
+            "Longest conversation": "Longest conversation",
+            "Realtime connection (leave unchanged)": "Realtime connection (leave unchanged)",
+            "Host": "Host",
+            "Port": "Port",
+            "TLS": "TLS",
+            "SymDo address, token and gateway are required": "SymDo address, token and gateway are required"
+        },
+        "de": {
+            "EchoMuse Voice": "EchoMuse - Sprachgespräch",
+            "Event for the gateway": "Meldung für das Gateway",
+            "State": "Zustand",
+            "Last request": "Letzte Anfrage",
+            "connecting": "verbinde",
+            "listening": "hört zu",
+            "idle": "bereit",
+            "Voice session not opened": "Sprachsitzung nicht geöffnet",
+            "Realtime connection refused": "Realtime-Verbindung abgelehnt",
+            "Realtime error": "Realtime-Fehler",
+            "SymDo address (hook of the SymDo Gateway)": "SymDo-Adresse (Hook des SymDo Gateways)",
+            "SymDo access token": "SymDo-Zugangstoken",
+            "SymDo user ID (whose lists and appointments the voice uses)": "SymDo-Nutzerkennung (wessen Listen und Termine die Stimme nutzt)",
+            "EchoMuse Gateway": "EchoMuse Gateway",
+            "Longest conversation": "Längstes Gespräch",
+            "Realtime connection (leave unchanged)": "Realtime-Verbindung (unverändert lassen)",
+            "Host": "Host",
+            "Port": "Port",
+            "TLS": "TLS",
+            "SymDo address, token and gateway are required": "SymDo-Adresse, Token und Gateway sind nötig"
+        }
+    }
+}

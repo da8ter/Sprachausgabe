@@ -1,0 +1,12 @@
+{
+    "id": "{01B516D7-72D6-463D-A073-6328154D7F09}",
+    "name": "EchoMuse Voice",
+    "type": 3,
+    "vendor": "Stephan Sprick",
+    "aliases": [],
+    "parentRequirements": ["{79827379-F36E-4ADA-8A95-5F8D1DC92FA9}"],
+    "childRequirements": [],
+    "implemented": ["{018EF6B5-AB94-40C6-AA53-46943E824ACF}"],
+    "prefix": "EMVS",
+    "url": "https://github.com/da8ter/Sprachausgabe"
+}

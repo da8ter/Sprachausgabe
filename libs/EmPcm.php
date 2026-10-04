@@ -9,7 +9,7 @@ declare(strict_types=1);
  */
 final class EmPcm
 {
-    public const RATE = 48000;
+    public const RATE = 48000; // Lautsprecher des Dots
     public const PERIOD_SAMPLES = 2048;
     public const PERIOD_BYTES = 4096;
     public const PERIOD_SECONDS = self::PERIOD_SAMPLES / self::RATE;

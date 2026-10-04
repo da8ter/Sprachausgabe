@@ -27,10 +27,11 @@ final class EmProtocol
     /** Lautstärke: 0,5-dB-Schritte, 127 = Einheitsverstärkung; darüber übersteuert der Wandler. */
     public const VOLUME_MAX = 127;
 
-    public static function ack(string $deviceId, int $timeMs): string
+    /** @param array<int, string>|null $features null = die Grundausstattung (ohne Sprachrunde) */
+    public static function ack(string $deviceId, int $timeMs, ?array $features = null): string
     {
         // time_ms: ein Echo kennt nach dem Einschalten keine Uhrzeit (Original-Controller sendet es ebenso)
-        return self::json(['type' => 'ack', 'device_id' => $deviceId, 'features' => self::FEATURES, 'time_ms' => $timeMs]);
+        return self::json(['type' => 'ack', 'device_id' => $deviceId, 'features' => $features ?? self::FEATURES, 'time_ms' => $timeMs]);
     }
 
     public static function pending(): string
@@ -84,6 +85,18 @@ final class EmProtocol
     public static function micStop(): string
     {
         return self::json(['type' => 'mic_stop']);
+    }
+
+    /** Das Wakeword wurde angenommen (stoppt die 3-Sekunden-Uhr des Geräts). */
+    public static function listenAck(int $session): string
+    {
+        return self::json(['type' => 'listen_ack', 'session' => $session]);
+    }
+
+    /** Die Sitzung beenden; das Gerät hört danach wieder nur lokal. */
+    public static function listenClose(int $session, string $reason): string
+    {
+        return self::json(['type' => 'listen_close', 'session' => $session, 'reason' => $reason]);
     }
 
     public static function speakerFlush(): string

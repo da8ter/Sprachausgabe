@@ -8,6 +8,9 @@ require_once __DIR__ . '/../libs/EmPcm.php';
 require_once __DIR__ . '/../libs/EmClock.php';
 require_once __DIR__ . '/../libs/EmGatewayState.php';
 require_once __DIR__ . '/../libs/EmGatewayPlayback.php';
+require_once __DIR__ . '/../libs/EmGatewayVoice.php';
+require_once __DIR__ . '/../libs/EmRealtime.php';
+require_once __DIR__ . '/../libs/EmSpool.php';
 
 /**
  * EchoMuse Gateway: Symcon als Controller für Echo Dots mit der EchoMuse-Firmware
@@ -22,6 +25,7 @@ class EchoMuseGateway extends IPSModuleStrict
 {
     use EmGatewayState;
     use EmGatewayPlayback;
+    use EmGatewayVoice;
 
     private const SOCKET_GUID = '{8062CF2B-600E-41D6-AD4B-1BA66C32D6ED}';
     private const SOCKET_RX = '{7A1272A4-CBDB-46EF-BFC6-DCF4A53D2FC7}';
@@ -36,10 +40,16 @@ class EchoMuseGateway extends IPSModuleStrict
         parent::Create();
         $this->RegisterPropertyInteger('Port', 8767);
         $this->RegisterPropertyBoolean('AutoApprove', false);
+        $this->RegisterPropertyInteger('VoiceInstance', 0);
+        $this->RegisterPropertyBoolean('WakeSound', true);
         $this->RegisterAttributeString('Approved', '[]');
         $this->RegisterAttributeString('Pending', '{}');
         $this->RegisterTimer('Keepalive', 0, 'EMGW_Keepalive($_IPS[\'TARGET\']);');
         $this->RegisterTimer('Pump', 0, 'EMGW_Pump($_IPS[\'TARGET\']);');
+        $this->RegisterVariableString('VOICE_CMD', $this->Translate('Voice command'), ['PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION], 90);
+        $this->RegisterVariableInteger('VOICE_MIC', $this->Translate('Voice microphone signal'), ['PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION], 91);
+        IPS_SetHidden($this->GetIDForIdent('VOICE_CMD'), true);
+        IPS_SetHidden($this->GetIDForIdent('VOICE_MIC'), true);
         $this->ConnectParent(self::SOCKET_GUID);
     }
 
@@ -50,6 +60,19 @@ class EchoMuseGateway extends IPSModuleStrict
             $this->RegisterMessage(0, IPS_KERNELSTARTED);
             return;
         }
+        foreach ($this->GetMessageList() as $sender => $messages) {
+            foreach ($messages as $message) {
+                if ($message === VM_UPDATE) {
+                    $this->UnregisterMessage((int)$sender, VM_UPDATE);
+                }
+            }
+        }
+        if ($this->voiceEnabled()) {
+            $event = (int)@IPS_GetObjectIDByIdent('EVENT', $this->ReadPropertyInteger('VoiceInstance'));
+            if ($event > 0) {
+                $this->RegisterMessage($event, VM_UPDATE);
+            }
+        }
         $this->SetTimerInterval('Keepalive', 20000);
         $this->SetSummary(sprintf('Port %d', $this->ReadPropertyInteger('Port')));
         $this->SetStatus(IS_ACTIVE);
@@ -59,6 +82,9 @@ class EchoMuseGateway extends IPSModuleStrict
     {
         if ($Message === IPS_KERNELSTARTED) {
             $this->ApplyChanges();
+        } elseif ($Message === VM_UPDATE && $this->voiceEnabled()
+            && $SenderID === (int)@IPS_GetObjectIDByIdent('EVENT', $this->ReadPropertyInteger('VoiceInstance'))) {
+            $this->onVoiceEvent((string)($Data[0] ?? ''));
         }
     }
 
@@ -166,8 +192,12 @@ class EchoMuseGateway extends IPSModuleStrict
                     $this->control($key, $data);
                 }
                 return;
+            case EmWebSocket::OP_BINARY:
+                if ($c['path'] === '/data' && $data !== '' && ord($data[0]) === EmProtocol::DATA_SESSION_AUDIO) {
+                    $this->onSessionAudio((string)$c['ip'], $data);
+                }
+                return;
             default:
-                // /data: ohne mic_start schickt das Gerät nichts; Mikrofon-Audio folgt mit der Sprachrunde
                 return;
         }
     }
@@ -201,6 +231,9 @@ class EchoMuseGateway extends IPSModuleStrict
                 break;
             case 'stats':
                 $this->touch($id);
+                break;
+            case 'oww_wake':
+                $this->onWake($id, $msg);
                 break;
         }
     }
@@ -237,7 +270,8 @@ class EchoMuseGateway extends IPSModuleStrict
         $devices = $this->devices();
         $devices[$id] = ['key' => $key, 'ip' => $c['ip'], 'version' => $reg['version'], 'caps' => $reg['caps'], 'os' => $reg['os'], 'board' => $reg['board'], 'seen' => (int)EmClock::now()];
         $this->saveDevices($devices);
-        $this->sendRaw($c['ip'], $c['port'], EmWebSocket::text(EmProtocol::ack($id, (int)(microtime(true) * 1000))));
+        $this->sendRaw($c['ip'], $c['port'], EmWebSocket::text(EmProtocol::ack($id, (int)(microtime(true) * 1000), $this->ackFeatures())));
+        $this->configureVoice($id);
         $this->toChildren($id, 'online', ['version' => $reg['version'], 'caps' => $reg['caps'], 'ip' => $c['ip']]);
     }
 
@@ -353,6 +387,8 @@ class EchoMuseGateway extends IPSModuleStrict
             'elements' => [
                 ['type' => 'NumberSpinner', 'name' => 'Port', 'caption' => 'Port', 'minimum' => 1024, 'maximum' => 65535],
                 ['type' => 'CheckBox', 'name' => 'AutoApprove', 'caption' => 'Accept every device without asking (home network only)'],
+                ['type' => 'SelectInstance', 'name' => 'VoiceInstance', 'caption' => 'EchoMuse Voice (empty = no voice conversations)'],
+                ['type' => 'CheckBox', 'name' => 'WakeSound', 'caption' => 'Play a short sound when the wake word is heard'],
             ],
             'actions' => [
                 ['type' => 'Label', 'caption' => $online === [] ? 'No device connected.' : 'Connected: ' . implode(', ', $online)],
@@ -441,6 +477,7 @@ class EchoMuseGateway extends IPSModuleStrict
                 $play = $this->plays();
                 unset($play[$id]);
                 $this->savePlays($play);
+                $this->stopVoice($id);
                 $this->toChildren($id, 'offline', []);
             }
         }
