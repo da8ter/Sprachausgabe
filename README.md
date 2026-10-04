@@ -42,6 +42,12 @@ Ansagen für Symcon: ein Auslöser, eine Bedingung, ein Text, ein oder mehrere A
 
 **Umstieg von eigenen Ansage-Skripten:** [tools/migrate_legacy.php](tools/migrate_legacy.php) übernimmt eine Kategorie mit Unterkategorien aus `switch`, `Zeitplan` und einem Skript mit festem Text und Auslöser-Ereignis. Als Skript-Inhalt ausführen; die Voreinstellung ist ein Probelauf, der nur einen Bericht ins Log schreibt. Mit `DRY_RUN = false` entstehen Zentrale und Ansagen, die alten Ereignisse werden deaktiviert, nicht gelöscht.
 
+## EchoMuse: Symcon als Controller für Echo Dots (Stufe 1)
+
+Echo Dots der **2. Generation** mit der Firmware [EchoMuse](https://github.com/wilbowes/EchoMuse) wählen sich bei einem **EchoMuse Gateway** (Präfix `EMGW`) ein, ganz ohne Home Assistant. Das Gateway setzt auf einem Server Socket auf (Port 8767) und spricht den Gerätelink der Firmware: Anmeldung mit Freigabe, Lautstärke, Tasten, Stumm, Ansagen. Je Dot gibt es ein **EchoMuse Gerät** (Präfix `EMGD`) mit Variablen und `EMGD_SpeakFile`, `EMGD_Beep`, `EMGD_PlayCue`, `EMGD_SendConfig`. In der Zentrale gibt es die Ausgabeart „EchoMuse-Dot (KI-Stimme)“: Der Text wird bei der KI-Stimme als WAV erzeugt und auf dem Dot abgespielt.
+
+Auf dem Dot muss die Controller-Adresse eingetragen sein (`/data/local/etc/echomuse/controller.json`, ab Firmware 2.16.0; mDNS gibt es in Stufe 1 nicht). Noch nicht enthalten: Sprachbefehle (Mikrofon), TLS mit Token. Prüfung: `php tests/echomuse_lib_test.php`, `php tests/echomuse_test.php`.
+
 ## 5. PHP-Befehle
 
 ```php

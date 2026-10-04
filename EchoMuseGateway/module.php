@@ -25,7 +25,6 @@ class EchoMuseGateway extends IPSModuleStrict
 
     private const SOCKET_GUID = '{8062CF2B-600E-41D6-AD4B-1BA66C32D6ED}';
     private const SOCKET_RX = '{7A1272A4-CBDB-46EF-BFC6-DCF4A53D2FC7}';
-    private const SOCKET_TX = '{C8792760-65CF-4C53-B5C7-A30FCC84FEFE}';
     private const CHILD_TX = '{046405B3-995F-400E-95B2-4EB912CB0818}'; // Gerät → Gateway
     private const CHILD_RX = '{70B90512-B075-499B-A777-C70F7FD0D7FF}'; // Gateway → Gerät
     private const DEVICE_GUID = '{077221A9-EA1F-4A00-8BA3-679A85233E80}';
@@ -74,9 +73,11 @@ class EchoMuseGateway extends IPSModuleStrict
     public function ReceiveData(string $JSONString): string
     {
         $data = json_decode($JSONString, true);
-        if (!is_array($data) || ($data['DataID'] ?? '') !== self::SOCKET_RX) {
+        if (!is_array($data) || !in_array($data['DataID'] ?? '', [self::SOCKET_RX, '{018EF6B5-AB94-40C6-AA53-46943E824ACF}'], true)) {
+            $this->SendDebug('ReceiveData', 'unknown DataID ' . (is_array($data) ? (string)($data['DataID'] ?? '?') : 'no JSON'), 0);
             return '';
         }
+        $this->SendDebug('Socket<', sprintf('%s:%s type=%s %d hex chars', $data['ClientIP'] ?? '?', $data['ClientPort'] ?? '?', $data['Type'] ?? '?', strlen((string)($data['Buffer'] ?? ''))), 0);
         $key = (string)($data['ClientIP'] ?? '') . ':' . (int)($data['ClientPort'] ?? 0);
         switch ((int)($data['Type'] ?? 0)) {
             case 1: // verbunden
@@ -86,10 +87,10 @@ class EchoMuseGateway extends IPSModuleStrict
                 $this->saveConns($conns);
                 break;
             case 2: // getrennt
-                $this->dropConnection($key, false);
+                $this->dropConnection($key);
                 break;
             default:
-                $bytes = mb_convert_encoding((string)($data['Buffer'] ?? ''), 'ISO-8859-1', 'UTF-8');
+                $bytes = (string)hex2bin((string)($data['Buffer'] ?? '')); // IPSModuleStrict: der Server Socket liefert Binärdaten als Hex (am 04.10.2026 gemessen)
                 $this->feed($key, (string)$data['ClientIP'], (int)$data['ClientPort'], $bytes);
         }
         return '';
@@ -117,7 +118,7 @@ class EchoMuseGateway extends IPSModuleStrict
                 $path = rtrim($req['path'], '/');
                 if (!EmWebSocket::isUpgrade($req['headers']) || !in_array($path, ['/control', '/data'], true)) {
                     $this->sendRaw($ip, $port, EmWebSocket::httpError(400, 'Bad Request'));
-                    $this->dropConnection($key, true);
+                    $this->dropConnection($key);
                     return;
                 }
                 $this->sendRaw($ip, $port, EmWebSocket::handshakeResponse($req['headers']['sec-websocket-key']));
@@ -139,7 +140,7 @@ class EchoMuseGateway extends IPSModuleStrict
             $this->SendDebug('Protocol', $key . ': ' . $e->getMessage(), 0);
             $this->sendRaw($ip, $port, ($conns[$key]['phase'] ?? 'http') === 'http' && $c['phase'] === 'http'
                 ? EmWebSocket::httpError(400, 'Bad Request') : EmWebSocket::close(1002));
-            $this->dropConnection($key, true);
+            $this->dropConnection($key);
         }
     }
 
@@ -158,7 +159,7 @@ class EchoMuseGateway extends IPSModuleStrict
                 return;
             case EmWebSocket::OP_CLOSE:
                 $this->sendRaw($c['ip'], $c['port'], EmWebSocket::close(1000));
-                $this->dropConnection($key, true);
+                $this->dropConnection($key);
                 return;
             case EmWebSocket::OP_TEXT:
                 if ($c['path'] === '/control') {
@@ -210,7 +211,7 @@ class EchoMuseGateway extends IPSModuleStrict
         $reg = EmProtocol::parseRegister($msg);
         if ($reg === null) {
             $this->sendRaw($c['ip'], $c['port'], EmWebSocket::close(1008));
-            $this->dropConnection($key, true);
+            $this->dropConnection($key);
             return;
         }
         $id = $reg['id'];
@@ -221,13 +222,13 @@ class EchoMuseGateway extends IPSModuleStrict
             $this->LogMessage(sprintf('%s: %s (%s)', $this->Translate('Unknown EchoMuse device waiting for approval'), $id, $c['ip']), KL_NOTIFY);
             $this->sendRaw($c['ip'], $c['port'], EmWebSocket::text(EmProtocol::pending()));
             $this->sendRaw($c['ip'], $c['port'], EmWebSocket::close(1000));
-            $this->dropConnection($key, true);
+            $this->dropConnection($key);
             return;
         }
         // Eine neue Anmeldung ersetzt eine alte desselben Geräts
         foreach ($this->conns() as $k => $other) {
             if ($k !== $key && $other['dev'] === $id && $other['path'] === '/control') {
-                $this->dropConnection($k, true);
+                $this->dropConnection($k);
             }
         }
         $conns = $this->conns();
@@ -296,14 +297,14 @@ class EchoMuseGateway extends IPSModuleStrict
         foreach ($this->conns() as $key => $c) {
             if ($c['phase'] !== 'ws') {
                 if ($now - (int)$c['seen'] > 10) { // Verbindung ohne Handshake
-                    $this->dropConnection($key, true);
+                    $this->dropConnection($key);
                 }
                 continue;
             }
             if ($now - (int)$c['seen'] > self::IDLE_CLOSE_SECONDS) {
                 $this->SendDebug('Keepalive', $key . ' timed out', 0);
                 $this->sendRaw($c['ip'], $c['port'], EmWebSocket::close(1001));
-                $this->dropConnection($key, true);
+                $this->dropConnection($key);
                 continue;
             }
             $this->sendRaw($c['ip'], $c['port'], EmWebSocket::frame(EmWebSocket::OP_PING, ''));
@@ -393,14 +394,17 @@ class EchoMuseGateway extends IPSModuleStrict
         }
     }
 
+    /**
+     * Bytes an einen Client des Server Sockets. Über SSCK_SendPacket, nicht über den Datenfluss:
+     * die Funktion nimmt Binärdaten roh an (am 04.10.2026 gemessen: 81 02 48 69 00 FF kam unverändert
+     * an), während der Datenfluss des Server Sockets in diesem Modul nichts auslieferte.
+     */
     private function sendRaw(string $ip, int $port, string $bytes): void
     {
-        @$this->SendDataToParent((string)json_encode([
-            'DataID'     => self::SOCKET_TX,
-            'Buffer'     => mb_convert_encoding($bytes, 'UTF-8', 'ISO-8859-1'),
-            'ClientIP'   => $ip,
-            'ClientPort' => $port,
-        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+        $socket = (int)(@IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
+        if ($socket > 0 && function_exists('SSCK_SendPacket')) {
+            @SSCK_SendPacket($socket, $bytes, $ip, $port);
+        }
     }
 
     /** @return array<string, mixed>|null die /data-Verbindung eines Geräts: gleiche Adresse wie sein /control */
@@ -418,7 +422,7 @@ class EchoMuseGateway extends IPSModuleStrict
         return null;
     }
 
-    private function dropConnection(string $key, bool $closeSocket): void
+    private function dropConnection(string $key): void
     {
         $conns = $this->conns();
         $c = $conns[$key] ?? null;
@@ -427,9 +431,7 @@ class EchoMuseGateway extends IPSModuleStrict
         }
         unset($conns[$key]);
         $this->saveConns($conns);
-        if ($closeSocket) {
-            @$this->SendDataToParent((string)json_encode(['DataID' => self::SOCKET_TX, 'Buffer' => '', 'ClientIP' => $c['ip'], 'ClientPort' => $c['port'], 'Type' => 2]));
-        }
+        // Der Server Socket kennt keine Funktion zum Trennen: nach einem Close-Rahmen (oder dem 400) schließt der Dot selbst.
         $id = (string)$c['dev'];
         if ($id !== '' && $c['path'] === '/control') {
             $devices = $this->devices();

@@ -32,9 +32,16 @@ final class FakeServerSocket
     public function ForwardData(string $json): string
     {
         $d = json_decode($json, true);
-        $this->sent[] = ['ip' => (string)$d['ClientIP'], 'port' => (int)$d['ClientPort'], 'bytes' => mb_convert_encoding((string)$d['Buffer'], 'ISO-8859-1', 'UTF-8'), 'type' => (int)($d['Type'] ?? 0)];
+        $this->sent[] = ['ip' => (string)$d['ClientIP'], 'port' => (int)$d['ClientPort'], 'bytes' => (string)hex2bin((string)$d['Buffer']), 'type' => (int)($d['Type'] ?? 0)];
         return '';
     }
+}
+
+/** Der Server Socket als Attrappe: SSCK_SendPacket schreibt wie der echte Socket mit. */
+function SSCK_SendPacket(int $id, string $bytes, string $ip, int $port): bool
+{
+    $GLOBALS['fakeSocket']->sent[] = ['ip' => $ip, 'port' => $port, 'bytes' => $bytes, 'type' => 0];
+    return true;
 }
 
 Kernel::reset();
@@ -45,12 +52,13 @@ Kernel::registerModule(['ModuleID' => SOCKET_GUID, 'ModuleName' => 'Server Socke
 Kernel::loadLibrary(dirname(__DIR__));
 $sock = Kernel::createInstance(SOCKET_GUID);
 $fake = new FakeServerSocket();
+$GLOBALS['fakeSocket'] = $fake;
 Kernel::$instances[$sock]['handler'] = $fake;
 
 /** Bytes vom Dot an den Server Socket → Gateway (wie das Kernel-Modul es zustellt). */
 $deliver = static function (string $ip, int $port, int $type, string $bytes = '') use ($sock): void {
     Kernel::sendToChildren($sock, (string)json_encode(['DataID' => SOCKET_RX, 'Type' => $type, 'ClientIP' => $ip, 'ClientPort' => $port,
-        'Buffer' => mb_convert_encoding($bytes, 'UTF-8', 'ISO-8859-1')]));
+        'Buffer' => bin2hex($bytes)]));
 };
 $request = static fn(string $path): string => "GET $path HTTP/1.1\r\nHost: gw\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nX-EM-Token: t\r\n\r\n";
 $send = static fn(string $json): string => EmWebSocket::clientFrame(EmWebSocket::OP_TEXT, $json);
@@ -110,7 +118,7 @@ $f = $take('192.168.0.50', 40001);
 check(count($f) === 1 && str_contains($f[0]['http'] ?? '', '101 Switching Protocols') && str_contains($f[0]['http'], 's3pPLMBiTxaQ9kYGzzhZRbK+xOo='), 'Upgrade beantwortet, Accept-Schlüssel stimmt');
 $deliver('192.168.0.50', 40001, 0, $send($register('G090LF0123456789')));
 $f = $take('192.168.0.50', 40001);
-check(($json($f[0] ?? [])['type'] ?? '') === 'pending' && ($f[1]['op'] ?? 0) === EmWebSocket::OP_CLOSE && !empty($f[2]['close']), 'unbekanntes Gerät: pending, dann Schließen');
+check(($json($f[0] ?? [])['type'] ?? '') === 'pending' && ($f[1]['op'] ?? 0) === EmWebSocket::OP_CLOSE, 'unbekanntes Gerät: pending, dann Close-Rahmen');
 $status = json_decode(Kernel::$instances[$gw]['attributes']['Pending'], true);
 check(isset($status['G090LF0123456789']) && $status['G090LF0123456789']['ip'] === '192.168.0.50', 'steht in der Liste der Wartenden');
 $deliver('192.168.0.50', 40001, 2);
@@ -204,7 +212,7 @@ check(EMGD_Beep($dev, 1) === 'device has no audio connection', 'und keine Wieder
 $deliver('192.168.0.51', 41000, 1);
 $deliver('192.168.0.51', 41000, 0, "POST / HTTP/1.1\r\n\r\n");
 $f = $take('192.168.0.51', 41000);
-check(str_contains($f[0]['http'] ?? '', '400') && !empty($f[1]['close']), 'Fremde HTTP-Anfrage: 400 und Schließen');
+check(str_contains($f[0]['http'] ?? '', '400'), 'Fremde HTTP-Anfrage: 400');
 $deliver('192.168.0.52', 41001, 1);
 $deliver('192.168.0.52', 41001, 0, $request('/shell/abc'));
 $f = $take('192.168.0.52', 41001);
@@ -214,13 +222,13 @@ $deliver('192.168.0.53', 41002, 0, $request('/control'));
 $take('192.168.0.53', 41002);
 $deliver('192.168.0.53', 41002, 0, EmWebSocket::text('x'));
 $f = $take('192.168.0.53', 41002);
-check(!empty($f[0]['close']) || !empty($f[count($f) - 1]['close']), 'unmaskierter Rahmen: Verbindung wird geschlossen');
+check(!empty(array_filter($f, static fn(array $x): bool => ($x['op'] ?? 0) === EmWebSocket::OP_CLOSE)), 'unmaskierter Rahmen: Close-Rahmen');
 $deliver('192.168.0.54', 41003, 1);
 $deliver('192.168.0.54', 41003, 0, $request('/control'));
 $take('192.168.0.54', 41003);
 Kernel::advance(90);
 $f = $take('192.168.0.54', 41003);
-check(count(array_filter($f, static fn(array $x): bool => ($x['op'] ?? 0) === EmWebSocket::OP_PING)) >= 2 && !empty(array_filter($f, static fn(array $x): bool => !empty($x['close']))),
+check(count(array_filter($f, static fn(array $x): bool => ($x['op'] ?? 0) === EmWebSocket::OP_PING)) >= 2 && !empty(array_filter($f, static fn(array $x): bool => ($x['op'] ?? 0) === EmWebSocket::OP_CLOSE)),
     'stille Verbindung wird alle 20 s gepingt und nach über 60 s geschlossen');
 
 section('AutoApprove');
