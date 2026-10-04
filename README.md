@@ -46,7 +46,17 @@ Ansagen für Symcon: ein Auslöser, eine Bedingung, ein Text, ein oder mehrere A
 
 Echo Dots der **2. Generation** mit der Firmware [EchoMuse](https://github.com/wilbowes/EchoMuse) wählen sich bei einem **EchoMuse Gateway** (Präfix `EMGW`) ein, ganz ohne Home Assistant. Das Gateway setzt auf einem Server Socket auf (Port 8767) und spricht den Gerätelink der Firmware: Anmeldung mit Freigabe, Lautstärke, Tasten, Stumm, Ansagen. Je Dot gibt es ein **EchoMuse Gerät** (Präfix `EMGD`) mit Variablen und `EMGD_SpeakFile`, `EMGD_Beep`, `EMGD_PlayCue`, `EMGD_SendConfig`. In der Zentrale gibt es die Ausgabeart „EchoMuse-Dot (KI-Stimme)“: Der Text wird bei der KI-Stimme als WAV erzeugt und auf dem Dot abgespielt.
 
-Auf dem Dot muss die Controller-Adresse eingetragen sein (`/data/local/etc/echomuse/controller.json`, ab Firmware 2.16.0; mDNS gibt es in Stufe 1 nicht). Noch nicht enthalten: Sprachbefehle (Mikrofon), TLS mit Token. Prüfung: `php tests/echomuse_lib_test.php`, `php tests/echomuse_test.php`.
+Auf dem Dot muss die Controller-Adresse eingetragen sein (`/data/local/etc/echomuse/controller.json`, ab Firmware 2.16.0; mDNS gibt es noch nicht). Noch nicht enthalten: TLS mit Token. Prüfung: `php tests/echomuse_lib_test.php`, `php tests/echomuse_test.php`.
+
+### Sprachgespräche mit dem Dot (EchoMuse Voice, Präfix `EMVS`)
+
+Der Dot erkennt sein Wakeword selbst (Private Listening: bis dahin verlässt kein Ton das Gerät). Danach läuft die Sprache **gestreamt** zur Realtime-Schnittstelle von OpenAI und die Antwort kommt schon beim Erzeugen zurück, ohne getrennte Spracherkennung und Stimme. Anweisungen, Werkzeuge (Listen, Termine, Geräte …) und die Sprechzeit-Grenzen kommen von **SymDo**; der OpenAI-Schlüssel bleibt dort.
+
+1. Das **EchoMuse Voice**-Modul anlegen (es legt einen Client Socket an). SymDo-Adresse (`http://<symcon>:3777/hook/lists/app`), SymDo-Zugangstoken und Nutzerkennung eintragen, das Gateway wählen.
+2. Im **Gateway** das Voice-Modul wählen. Das Gateway sagt dem Dot „owwOnDevice“ und schaltet den Signalton beim Wakeword ein.
+3. In SymDo muss ein **Realtime-Modell** eingestellt sein (`gpt-realtime-mini` oder `gpt-realtime`), nicht GPT-Live: GPT-Live läuft über WebRTC.
+
+Ablauf: `oww_wake` → `listen_ack` → Mikrofon (0x07) → Voice → `speech_stopped` → `listen_close` → Werkzeugaufrufe über SymDo → Antwort-Audio als Strom zum Dot. Es läuft **eine Sitzung gleichzeitig**, ein zweiter Dot bekommt „busy“. Der Dot braucht sein Wakeword-Modell (wird beim Einrichten mit dem EchoMuse-Controller installiert). Prüfung: `php tests/echomuse_test.php`.
 
 ## 5. PHP-Befehle
 
