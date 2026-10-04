@@ -56,6 +56,8 @@ Der Dot erkennt sein Wakeword selbst (Private Listening: bis dahin verlässt kei
 2. Im **Gateway** das Voice-Modul wählen. Das Gateway sagt dem Dot „owwOnDevice“ und schaltet den Signalton beim Wakeword ein.
 3. In SymDo muss ein **Realtime-Modell** eingestellt sein (`gpt-realtime-mini` oder `gpt-realtime`), nicht GPT-Live: GPT-Live läuft über WebRTC.
 
+Gemessen am 04.10.2026 (Symcon 9.1 im Docker, echtes SymDo, echtes OpenAI mit TLS, Attrappen-Dot mit gesprochenem Satz): „Wie spät ist es?“ wird richtig erkannt und beantwortet, der Werkzeugaufruf über SymDo dauert rund 15 ms, das erste Antwort-Audio liegt etwa eine Sekunde nach Sprachende vor. Ein echter Dot ist noch nicht daran gelaufen.
+
 Ablauf: `oww_wake` → `listen_ack` → Mikrofon (0x07) → Voice → `speech_stopped` → `listen_close` → Werkzeugaufrufe über SymDo → Antwort-Audio als Strom zum Dot. Es läuft **eine Sitzung gleichzeitig**, ein zweiter Dot bekommt „busy“. Der Dot braucht sein Wakeword-Modell (wird beim Einrichten mit dem EchoMuse-Controller installiert). Prüfung: `php tests/echomuse_test.php`.
 
 ## 5. PHP-Befehle

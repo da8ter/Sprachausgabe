@@ -176,11 +176,12 @@ class EchoMuseVoice extends IPSModuleStrict
         }
         $callId = 'echomuse-' . preg_replace('/[^A-Za-z0-9]/', '', $dev) . '-' . (int)EmClock::now();
         $this->symdo()->opened($callId, $user, $tile);
-        EmSpool::clear('mic_' . $dev);
+        // mic_ NICHT leeren: das Gateway schreibt seit dem Wake hinein (und leert dort selbst), der Satzanfang liegt schon da
         EmSpool::clear('out_' . $dev);
         $this->saveSession(['dev' => $dev, 'session' => $sessionNo, 'callId' => $callId, 'user' => $user, 'tile' => $tile,
             'state' => 'connecting', 'secret' => $open['value'], 'model' => $open['model'], 'key' => EmWsClient::newKey(),
-            'buf' => '', 'partial' => '', 'pop' => 0, 'micOff' => 0, 'outOff' => 0, 'started' => (int)EmClock::now(), 'tools' => 0, 'text' => '']);
+            'buf' => '', 'partial' => '', 'pop' => 0, 'outOff' => 0, 'started' => (int)EmClock::now(), 'tools' => 0, 'text' => '']);
+        $this->SetBuffer('MIC', '0'); // eigener Puffer: pumpMic läuft aus der Nachrichtenbehandlung und darf den Empfangsstand nicht zurückschreiben
         $this->SetValue('STATE', $this->Translate('connecting'));
         $this->openSocket();
     }
@@ -261,7 +262,7 @@ class EchoMuseVoice extends IPSModuleStrict
                 }
             }
         } catch (\InvalidArgumentException $e) {
-            $this->SendDebug('Protocol', $e->getMessage(), 0);
+            $this->SendDebug('Protocol', $e->getMessage() . ' state=' . ($s['state'] ?? '?') . ' in=' . strlen($bytes) . ' buf=' . strlen($buffer) . ' head=' . bin2hex(substr($buffer, 0, 16)), 0);
             $this->finish('protocol error', true);
         }
     }
@@ -274,12 +275,11 @@ class EchoMuseVoice extends IPSModuleStrict
         if ($s === null || $s['state'] !== 'ready') {
             return;
         }
-        [$pcm, $off] = EmSpool::read('mic_' . $s['dev'], (int)$s['micOff']);
+        [$pcm, $off] = EmSpool::read('mic_' . $s['dev'], (int)$this->GetBuffer('MIC'));
         if ($pcm === '') {
             return;
         }
-        $s['micOff'] = $off;
-        $this->saveSession($s);
+        $this->SetBuffer('MIC', (string)$off);
         $samples = array_values((array)unpack('s*', substr($pcm, 0, strlen($pcm) - (strlen($pcm) % 2))));
         for ($i = 0; $i < count($samples); $i += self::MIC_BATCH_SAMPLES * 4) { // etwa 320 ms je Nachricht
             $chunk = array_slice($samples, $i, self::MIC_BATCH_SAMPLES * 4);
@@ -293,6 +293,9 @@ class EchoMuseVoice extends IPSModuleStrict
         $s = $this->session();
         if ($s === null) {
             return;
+        }
+        if ($e['kind'] !== 'other') {
+            $this->SendDebug('Event', (string)$e['kind'] . (isset($e['text']) ? ': ' . mb_substr((string)$e['text'], 0, 120) : '') . (isset($e['pcm24k']) ? ' ' . strlen((string)$e['pcm24k']) . ' B' : '') . (isset($e['message']) ? ': ' . $e['message'] : ''), 0);
         }
         switch ($e['kind']) {
             case 'speech_stopped':
@@ -336,7 +339,9 @@ class EchoMuseVoice extends IPSModuleStrict
         $s['tools'] = (int)$s['tools'] + 1;
         $s['pendingTool'] = true;
         $this->saveSession($s);
+        $t0 = microtime(true);
         $result = $this->symdo()->tool((string)$s['callId'], (string)$s['user'], $name, $args, $callId); // blockiert diese Instanz kurz; das Gateway läuft weiter
+        $this->SendDebug('Tool', sprintf('%s %d ms', $name, (int)round((microtime(true) - $t0) * 1000)), 0);
         $this->sendRaw(EmWsClient::text(EmRealtime::functionOutput($callId, (string)json_encode($result, JSON_UNESCAPED_UNICODE))));
         $this->sendRaw(EmWsClient::text(EmRealtime::responseCreate()));
     }
