@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/AwsSigV4.php';
+require_once __DIR__ . '/EmPcm.php';
 
 /**
  * KI-Stimme: Text → Tondatei bei einem der fünf Anbieter, die auch SymDo kennt
@@ -88,13 +89,14 @@ final class SpeechAi
         return 'unknown provider';
     }
 
-    public function format(): string
+    /** Ausgabeformat der Aufnahme: mp3, oder wav (immer für Gemini, auf Wunsch bei allen anderen — Echo-Dots spielen PCM). */
+    public function format(bool $wav = false): string
     {
-        return $this->provider() === 'gemini' ? 'wav' : 'mp3';
+        return $wav || $this->provider() === 'gemini' ? 'wav' : 'mp3';
     }
 
     /** Kennung einer Aufnahme: Text, Anbieter, Stimme und Format — ändert sich eins, entsteht sie neu. */
-    public function hash(string $text): string
+    public function hash(string $text, bool $wav = false): string
     {
         $p = $this->provider();
         $voice = match ($p) {
@@ -105,11 +107,11 @@ final class SpeechAi
             'gemini' => $this->cfg['gemini_model'] . '/' . $this->cfg['gemini_voice'] . '/' . $this->cfg['instructions'],
             default => '',
         };
-        return hash('sha256', $p . '|' . $voice . '|' . $this->format() . '|' . $text);
+        return hash('sha256', $p . '|' . $voice . '|' . $this->format($wav) . '|' . $text);
     }
 
     /** @return array{audio: string, error: string} */
-    public function synthesize(string $text): array
+    public function synthesize(string $text, bool $wav = false): array
     {
         $missing = $this->missing();
         if ($missing !== '') {
@@ -117,10 +119,10 @@ final class SpeechAi
         }
         try {
             return match ($this->provider()) {
-                'openai' => $this->openai($text),
-                'azure' => $this->azure($text),
-                'elevenlabs' => $this->eleven($text),
-                'polly' => $this->polly($text),
+                'openai' => $this->openai($text, $wav),
+                'azure' => $this->azure($text, $wav),
+                'elevenlabs' => $this->eleven($text, $wav),
+                'polly' => $this->polly($text, $wav),
                 'gemini' => $this->gemini($text),
             };
         } catch (\Throwable $e) {
@@ -130,20 +132,20 @@ final class SpeechAi
 
     // ------------------------------------------------------------------ Anbieter
 
-    private function openai(string $text): array
+    private function openai(string $text, bool $wav): array
     {
         $body = (string)json_encode([
             'model' => $this->cfg['openai_model'],
             'voice' => in_array($this->cfg['openai_voice'], self::OPENAI_VOICES, true) ? $this->cfg['openai_voice'] : 'alloy',
             'input' => $text,
             'instructions' => $this->cfg['instructions'],
-            'response_format' => 'mp3',
+            'response_format' => $wav ? 'wav' : 'mp3',
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         return $this->audioFrom('OpenAI', ($this->http)('https://api.openai.com/v1/audio/speech',
             ['Authorization: Bearer ' . $this->cfg['openai_key'], 'Content-Type: application/json'], $body));
     }
 
-    private function azure(string $text): array
+    private function azure(string $text, bool $wav): array
     {
         $voice = $this->cfg['azure_voice'];
         $lang = preg_match('/^([a-z]{2}-[A-Z]{2})-/', $voice, $m) === 1 ? $m[1] : 'de-DE';
@@ -155,12 +157,12 @@ final class SpeechAi
         return $this->audioFrom('Azure', ($this->http)('https://' . $region . '.tts.speech.microsoft.com/cognitiveservices/v1', [
             'Ocp-Apim-Subscription-Key: ' . $this->cfg['azure_key'],
             'Content-Type: application/ssml+xml; charset=utf-8',
-            'X-Microsoft-OutputFormat: audio-24khz-48kbitrate-mono-mp3',
+            'X-Microsoft-OutputFormat: ' . ($wav ? 'riff-24khz-16bit-mono-pcm' : 'audio-24khz-48kbitrate-mono-mp3'),
             'User-Agent: SymconSprachausgabe',
         ], $ssml));
     }
 
-    private function eleven(string $text): array
+    private function eleven(string $text, bool $wav): array
     {
         $voice = preg_replace('/[^A-Za-z0-9_-]/', '', $this->cfg['eleven_voice']) ?: self::DEFAULTS['eleven_voice'];
         $body = (string)json_encode([
@@ -169,25 +171,28 @@ final class SpeechAi
             'voice_settings' => ['stability' => 0.5, 'similarity_boost' => 0.75, 'style' => 0.0, 'use_speaker_boost' => true, 'speed' => 1.0],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $result = $this->audioFrom('ElevenLabs', ($this->http)(
-            'https://api.elevenlabs.io/v1/text-to-speech/' . $voice . '?output_format=mp3_44100_64',
+            'https://api.elevenlabs.io/v1/text-to-speech/' . $voice . '?output_format=' . ($wav ? 'pcm_24000' : 'mp3_44100_64'),
             ['xi-api-key: ' . $this->cfg['eleven_key'], 'Content-Type: application/json', 'Accept: audio/mpeg', 'User-Agent: SymconSprachausgabe'],
             $body
         ));
         $a = $result['audio'];
+        if ($wav && $a !== '') {
+            return ['audio' => EmPcm::wrapWav($a, 24000), 'error' => '']; // rohes 16-Bit-PCM, 24 kHz
+        }
         if ($a !== '' && !str_starts_with($a, 'ID3') && !(strlen($a) > 1 && $a[0] === "\xFF")) {
             return ['audio' => '', 'error' => 'ElevenLabs: expected MP3, got ' . mb_substr($a, 0, 120)];
         }
         return $result;
     }
 
-    private function polly(string $text): array
+    private function polly(string $text, bool $wav): array
     {
         $region = preg_replace('/[^a-z0-9-]/', '', strtolower($this->cfg['polly_region'])) ?: 'eu-central-1';
         $engine = in_array($this->cfg['polly_engine'], self::POLLY_ENGINES, true) ? $this->cfg['polly_engine'] : 'neural';
         $body = (string)json_encode([
-            'OutputFormat' => 'mp3', 'Text' => $text, 'TextType' => 'text',
+            'OutputFormat' => $wav ? 'pcm' : 'mp3', 'Text' => $text, 'TextType' => 'text',
             'VoiceId' => $this->cfg['polly_voice'], 'Engine' => $engine, 'LanguageCode' => 'de-DE',
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ] + ($wav ? ['SampleRate' => '16000'] : []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $host = 'polly.' . $region . '.amazonaws.com';
         $headers = [];
         foreach (AwsSigV4::Headers('POST', $host, '/v1/speech', '', $body, ['Content-Type' => 'application/json'],
@@ -195,6 +200,9 @@ final class SpeechAi
             $headers[] = $name . ': ' . $value;
         }
         $result = $this->audioFrom('Polly', ($this->http)('https://' . $host . '/v1/speech', $headers, $body));
+        if ($wav && $result['error'] === '') {
+            $result['audio'] = EmPcm::wrapWav($result['audio'], 16000); // Polly-PCM: 16 kHz, 16 Bit, mono, ohne Kopf
+        }
         if ($result['error'] !== '' && (strlen($this->cfg['polly_key']) !== 20 || strlen($this->cfg['polly_secret']) !== 40)) {
             $result['error'] .= ' (AWS access keys have 20 characters, secrets 40)';
         }

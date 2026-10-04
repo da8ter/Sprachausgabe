@@ -1,0 +1,24 @@
+{
+    "translations": {
+        "en": {
+            "EchoMuse Gateway": "EchoMuse - Gateway",
+            "Unknown EchoMuse device waiting for approval": "Unknown EchoMuse device waiting for approval",
+            "Audio connection lost during playback": "Audio connection lost during playback",
+            "Port": "Port",
+            "Accept every device without asking (home network only)": "Accept every device without asking (home network only)",
+            "No device connected.": "No device connected.",
+            "Waiting for approval": "Waiting for approval",
+            "Approve": "Approve"
+        },
+        "de": {
+            "EchoMuse Gateway": "EchoMuse - Gateway",
+            "Unknown EchoMuse device waiting for approval": "Unbekanntes EchoMuse-Gerät wartet auf Freigabe",
+            "Audio connection lost during playback": "Audioverbindung während der Wiedergabe verloren",
+            "Port": "Port",
+            "Accept every device without asking (home network only)": "Jedes Gerät ohne Nachfrage annehmen (nur im Heimnetz)",
+            "No device connected.": "Kein Gerät verbunden.",
+            "Waiting for approval": "Wartet auf Freigabe",
+            "Approve": "Freigeben"
+        }
+    }
+}

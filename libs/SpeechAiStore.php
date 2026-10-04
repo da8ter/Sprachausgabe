@@ -49,17 +49,17 @@ trait SpeechAiStore
      * Tondatei für $text: aus dem Zwischenspeicher oder neu erzeugt.
      * @return array{url: string, file: string, error: string}
      */
-    private function aiAudio(string $text): array
+    private function aiAudio(string $text, bool $wav = false): array
     {
         $ai = $this->ai();
         $missing = $ai->missing();
         if ($missing !== '') {
             return ['url' => '', 'file' => '', 'error' => $missing];
         }
-        $name = $ai->hash($text) . '.' . $ai->format();
+        $name = $ai->hash($text, $wav) . '.' . $ai->format($wav);
         $file = $this->aiDir() . $name;
         if (!is_file($file)) {
-            $result = $ai->synthesize($text);
+            $result = $ai->synthesize($text, $wav);
             if ($result['error'] !== '') {
                 return ['url' => '', 'file' => '', 'error' => $result['error']];
             }

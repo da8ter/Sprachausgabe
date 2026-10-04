@@ -14,11 +14,12 @@ final class SpeechOutputs
     public const FULLY = 'fully';
     public const SCRIPT = 'script';
     public const AI_SCRIPT = 'ai_script';
+    public const ECHOMUSE = 'echomuse';
 
     /** @return array<int, string> */
     public static function types(): array
     {
-        return [self::ECHO_SPEAK, self::ECHO_ANNOUNCE, self::FULLY, self::SCRIPT, self::AI_SCRIPT];
+        return [self::ECHO_SPEAK, self::ECHO_ANNOUNCE, self::FULLY, self::SCRIPT, self::AI_SCRIPT, self::ECHOMUSE];
     }
 
     /**
@@ -50,6 +51,22 @@ final class SpeechOutputs
                     return 'no Fully Kiosk instance selected';
                 }
                 return self::call('FKB_textToSpeech', [$instance, $text]);
+            case self::ECHOMUSE:
+                if (!self::instanceOk($instance)) {
+                    return 'no EchoMuse device selected';
+                }
+                $audio = (array)($output['audio'] ?? []);
+                if ((string)($audio['error'] ?? 'no AI audio') !== '') {
+                    return 'AI voice: ' . (string)($audio['error'] ?? 'no AI audio'); // der Dot hat keine eigene Stimme
+                }
+                if (!function_exists('EMGD_SpeakFile')) {
+                    return 'EMGD_SpeakFile is not available (module not installed)';
+                }
+                try {
+                    return (string)EMGD_SpeakFile($instance, (string)($audio['file'] ?? '')); // '' = angenommen, sonst der Grund
+                } catch (\Throwable $e) {
+                    return 'EMGD_SpeakFile: ' . $e->getMessage();
+                }
             case self::SCRIPT:
             case self::AI_SCRIPT:
                 $script = (int)($output['script'] ?? 0);

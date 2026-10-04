@@ -1,0 +1,42 @@
+{
+    "translations": {
+        "en": {
+            "EchoMuse Geraet": "EchoMuse - Device",
+            "Online": "Online",
+            "Offline": "Offline",
+            "Volume": "Volume",
+            "Muted": "Muted",
+            "Microphone on": "Microphone on",
+            "Last button": "Last button",
+            "Firmware": "Firmware",
+            "Last contact": "Last contact",
+            "Volume not set": "Volume not set",
+            "Unknown action": "Unknown action",
+            "Device ID (shown in the gateway when the device asks to join)": "Device ID (shown in the gateway when the device asks to join)",
+            "Volume after connecting (0 = leave unchanged)": "Volume after connecting (0 = leave unchanged)",
+            "Test tone": "Test tone",
+            "No device ID entered": "No device ID entered",
+            "no gateway connected": "no gateway connected",
+            "device is offline": "device is offline"
+        },
+        "de": {
+            "EchoMuse Geraet": "EchoMuse - Gerät",
+            "Online": "Online",
+            "Offline": "Offline",
+            "Volume": "Lautstärke",
+            "Muted": "Stumm",
+            "Microphone on": "Mikrofon an",
+            "Last button": "Letzte Taste",
+            "Firmware": "Firmware",
+            "Last contact": "Letzter Kontakt",
+            "Volume not set": "Lautstärke nicht gesetzt",
+            "Unknown action": "Unbekannte Aktion",
+            "Device ID (shown in the gateway when the device asks to join)": "Geräte-ID (das Gateway zeigt sie, wenn das Gerät sich anmeldet)",
+            "Volume after connecting (0 = leave unchanged)": "Lautstärke nach dem Verbinden (0 = unverändert)",
+            "Test tone": "Testton",
+            "No device ID entered": "Keine Geräte-ID eingetragen",
+            "no gateway connected": "kein Gateway verbunden",
+            "device is offline": "Gerät ist offline"
+        }
+    }
+}

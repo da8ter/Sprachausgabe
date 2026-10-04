@@ -13,6 +13,8 @@ final class EmPcm
     public const PERIOD_SAMPLES = 2048;
     public const PERIOD_BYTES = 4096;
     public const PERIOD_SECONDS = self::PERIOD_SAMPLES / self::RATE;
+    /** So weit darf die Wiedergabe der Echtzeit vorauslaufen: das Gerät puffert ~5,5 s, der Rest blockiert es. */
+    public const LEAD_SECONDS = 3.0;
     /** Mehr als 60 s sind keine Ansage; schützt den Speicher. */
     public const MAX_SECONDS = 60;
 

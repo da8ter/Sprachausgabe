@@ -270,6 +270,50 @@ foreach (glob(IPS_GetKernelDir() . 'media/sprachausgabe_' . $hub2 . '/*') ?: [] 
 $form = json_decode(Kernel::$instances[$hub2]['object']->GetConfigurationForm(), true);
 check(is_array($form) && str_contains(json_encode($form), 'AiElevenKey') && str_contains(json_encode($form), 'AiPollySecret'), 'Formular enthält alle Anbieter');
 
+section('EchoMuse als Ausgabe: WAV von jedem Anbieter, Aufruf des Geräts');
+function EMGD_SpeakFile(int $id, string $file): string { $GLOBALS['calls'][] = ['emgd', $id, $file]; return is_file($file) ? '' : 'audio file not found'; }
+$wavCases = [
+    'openai' => [['openai_key' => 'k'], '"response_format":"wav"'],
+    'azure' => [['azure_key' => 'k'], 'riff-24khz-16bit-mono-pcm'],
+    'elevenlabs' => [['eleven_key' => 'k'], 'output_format=pcm_24000'],
+    'polly' => [['polly_key' => str_repeat('A', 20), 'polly_secret' => str_repeat('s', 40)], '"OutputFormat":"pcm"'],
+];
+foreach ($wavCases as $provider => [$cfg, $needle]) {
+    $GLOBALS['http'] = [];
+    $GLOBALS['httpAnswer'] = ['status' => 200, 'body' => str_repeat("\1\0", 200), 'err' => ''];
+    $ai = new SpeechAi(['provider' => $provider] + $cfg);
+    $r = $ai->synthesize('Hallo', true);
+    $call = $GLOBALS['http'][0] ?? ['url' => '', 'headers' => [], 'body' => ''];
+    $seen = $call['url'] . implode('|', $call['headers']) . $call['body'];
+    $isWav = str_starts_with($r['audio'], 'RIFF') || $provider === 'openai' || $provider === 'azure';
+    check($r['error'] === '' && str_contains($seen, $needle) && $isWav && $ai->format(true) === 'wav' && $ai->hash('x', true) !== $ai->hash('x', false),
+        "$provider: fordert WAV an ($needle), eigene Kennung für die WAV-Aufnahme" . ($r['error'] !== '' ? ' — ' . $r['error'] : ''));
+}
+$GLOBALS['httpAnswer'] = ['status' => 200, 'body' => str_repeat("\1\0", 3200), 'err' => ''];
+$r = (new SpeechAi(['provider' => 'elevenlabs', 'eleven_key' => 'k']))->synthesize('x', true);
+$conv = EmPcm::fromWav($r['audio']);
+check($conv['error'] === '' && strlen($conv['pcm']) === 12800, 'ElevenLabs-PCM (24 kHz, ohne Kopf) wird mit WAV-Kopf zu 48-kHz-PCM: ' . strlen($conv['pcm']) . ' Byte');
+$GLOBALS['httpAnswer'] = null;
+$GLOBALS['http'] = [];
+$GLOBALS['httpAnswer'] = ['status' => 200, 'body' => EmPcm::wrapWav(str_repeat("\1\0", 480), 24000), 'err' => ''];
+$hub3 = Kernel::createInstance(HUB);
+IPS_SetProperty($hub3, 'Outputs', json_encode([['name' => 'Arbeitszimmer', 'type' => 'echomuse', 'instance' => $echo, 'script' => 0, 'volume' => 0, 'default' => true]]));
+IPS_SetProperty($hub3, 'AiProvider', 'openai');
+IPS_SetProperty($hub3, 'AiOpenAIKey', 'sk-test');
+IPS_SetProperty($hub3, 'Cooldown', 0);
+IPS_ApplyChanges($hub3);
+$GLOBALS['calls'] = [];
+SPAZ_Speak($hub3, 'Der Dot spricht.', '', 0);
+Kernel::advance(1);
+$c = $GLOBALS['calls'][0] ?? [];
+check(($c[0] ?? '') === 'emgd' && ($c[1] ?? 0) === $echo && str_ends_with((string)($c[2] ?? ''), '.wav') && is_file((string)$c[2]), 'Zentrale ruft EMGD_SpeakFile mit der WAV-Aufnahme des Textes');
+check(str_contains(($GLOBALS['http'][0]['body'] ?? ''), '"response_format":"wav"'), 'und fordert dafür WAV an');
+SPAZ_Speak($hub3, 'Der Dot spricht.', '', 0);
+Kernel::advance(2);
+check(count($GLOBALS['http']) === 1, 'gleicher Text: aus dem Zwischenspeicher');
+foreach (glob(IPS_GetKernelDir() . 'media/sprachausgabe_' . $hub3 . '/*') ?: [] as $f) { @unlink($f); }
+$GLOBALS['httpAnswer'] = null;
+
 check(Kernel::$warnings === [], 'keine PHP-Warnungen' . (Kernel::$warnings === [] ? '' : ': ' . implode(' | ', Kernel::$warnings)));
 check(World::logLines('/ERROR/') === [], 'keine Fehler im Log' . (World::logLines('/ERROR/') === [] ? '' : ': ' . implode(' | ', World::logLines('/ERROR/'))));
 done();

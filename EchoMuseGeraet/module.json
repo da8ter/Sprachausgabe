@@ -1,0 +1,12 @@
+{
+    "id": "{077221A9-EA1F-4A00-8BA3-679A85233E80}",
+    "name": "EchoMuse Geraet",
+    "type": 3,
+    "vendor": "Stephan Sprick",
+    "aliases": [],
+    "parentRequirements": ["{046405B3-995F-400E-95B2-4EB912CB0818}"],
+    "childRequirements": [],
+    "implemented": ["{70B90512-B075-499B-A777-C70F7FD0D7FF}"],
+    "prefix": "EMGD",
+    "url": "https://github.com/da8ter/Sprachausgabe"
+}

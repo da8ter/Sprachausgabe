@@ -164,6 +164,8 @@ class SprachausgabeZentrale extends IPSModuleStrict
         $text = $this->Translate('This is a test announcement.');
         if (($output['type'] ?? '') === SpeechOutputs::AI_SCRIPT) {
             $output['audio'] = $this->aiAudio($text);
+        } elseif (($output['type'] ?? '') === SpeechOutputs::ECHOMUSE) {
+            $output['audio'] = $this->aiAudio($text, true);
         }
         $error = SpeechOutputs::speak($output, $text, $this->volumeFor($output, 0));
         echo $error === '' ? $this->Translate('Sent') : $this->Translate('Failed') . ': ' . $error;
@@ -259,7 +261,12 @@ class SprachausgabeZentrale extends IPSModuleStrict
             return;
         }
         $audio = null;
+        $wavAudio = null;
         foreach ($outputs as $output) {
+            if (($output['type'] ?? '') === SpeechOutputs::ECHOMUSE) {
+                $wavAudio ??= $this->aiAudio($text, true); // PCM für den Dot: WAV beim Anbieter anfordern
+                $output['audio'] = $wavAudio;
+            }
             if (($output['type'] ?? '') === SpeechOutputs::AI_SCRIPT) {
                 $audio ??= $this->aiAudio($text); // one recording for every AI output of this announcement
                 $output['audio'] = $audio;

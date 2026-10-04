@@ -62,7 +62,9 @@
             "Gemini key missing": "Gemini-Schlüssel fehlt",
             "audio larger than the hook output limit (shorten the text)": "Audiodatei größer als die Hook-Ausgabegrenze (Text kürzen)",
             "audio file could not be written": "Audiodatei konnte nicht geschrieben werden",
-            "Volume variable": "Lautstärke-Variable"
+            "Volume variable": "Lautstärke-Variable",
+            "type:echomuse": "EchoMuse-Dot (KI-Stimme)",
+            "no EchoMuse device selected": "kein EchoMuse-Gerät gewählt"
         }
     }
 }
