@@ -7,6 +7,7 @@ Jede Datei endet mit „Stand: geprüft gegen den Code am …“. Ändert ein Co
 ## Entscheidungen (`entscheidungen/`)
 
 - [zentrale-und-ansage](entscheidungen/zentrale-und-ansage.md) – Splitter und Ansagen, Warteschlange, Zeitauslöser, Übernahme alter Skripte
+- [push](entscheidungen/push.md) – Push Zentrale: Nachrichten als Liste, Empfänger = Visualisierung, Schalter je Nachricht und Empfänger, Übernahme alter Push-Skripte
 - [ki-stimme](entscheidungen/ki-stimme.md) – fünf Anbieter, Zwischenspeicher, Hook, ElevenLabs-Fallen
 - [echomuse-gateway](entscheidungen/echomuse-gateway.md) – Symcon als Controller für Echo Dots: Server Socket, eigener WebSocket, Gerätelink
 - [echomuse-voice](entscheidungen/echomuse-voice.md) – Sprachrunde über SymDo und OpenAI Realtime, Entkopplung der Instanzen

@@ -7,19 +7,20 @@ Projektwissen (Entscheidungen, Protokoll-Eigenheiten, Test-Rezepte): **`.claude/
 ## Aufbau
 
 - **`SprachausgabeZentrale/`** (SPAZ, Splitter): Ausgabegeräte, globale Bedingung, Sperrfrist, Warteschlange, KI-Stimme (Trait `libs/SpeechAiStore.php`, Hook `sprachausgabe`).
-- **`SprachausgabeAnsage/`** (SPAA, Gerät): Variablen- und Zeitauslöser, Bedingung, Textvarianten mit Platzhaltern, Ziele.
+- **`SprachausgabeAnsage/`** (SPAA, Gerät): Auslöser aus dem Bedingungs-Dialog (alte Instanzen werden umgestellt) und Zeitauslöser, Bedingung, Textvarianten mit Platzhaltern, Ziele.
+- **`PushZentrale/`** (PUSHZ, Gerät): Pushbenachrichtigungen – Empfänger (je Visualisierung), Nachrichten als Liste mit Dialog, Schalter je Nachricht und Empfänger, Verzögerung/Wiederholung (Formular in `libs/PushForm.php`, Versand in `libs/PushOutputs.php`).
 - **`EchoMuseGateway/`** (EMGW, Splitter auf einem Server Socket): Gerätelink der EchoMuse-Firmware, Freigabe, Wiedergabe, Sprachrunden-Vermittlung (Traits `libs/EmGateway*.php`).
 - **`EchoMuseGeraet/`** (EMGD): ein Dot mit Variablen und `SpeakFile`, `Beep`, `PlayCue`, `SendConfig`.
 - **`EchoMuseVoice/`** (EMVS, auf einem Client Socket): Sprachrunde Dot ↔ OpenAI Realtime, Sitzung und Werkzeuge über SymDo.
 - **`libs/`**: reine Bausteine ohne Symcon (`SpeechAi`, `EmWebSocket`, `EmProtocol`, `EmPcm`, `EmRealtime`, `EmSpool`, `SymDoVoiceClient`, `AwsSigV4`) plus die Traits.
-- **`tools/migrate_legacy.php`**: Übernahme alter Ansage-Skripte, als Skript-Inhalt in Symcon auszuführen.
+- **`tools/migrate_legacy.php`** / **`tools/migrate_push.php`**: Übernahme alter Ansage- bzw. Push-Skripte, als Skript-Inhalt in Symcon auszuführen.
 - Alle Module: `IPSModuleStrict`, Darstellungen statt Variablenprofilen.
 
 ## Prüfen
 
 ```bash
 php tests/echomuse_lib_test.php   # reine Bausteine, ohne Symcon
-php tests/smoke_test.php          # Zentrale und Ansage im Prüfstand-Kernel
+php tests/smoke_test.php          # Zentrale, Ansage und Push Zentrale im Prüfstand-Kernel
 php tests/echomuse_test.php       # Gateway, Gerät, Voice mit Attrappen-Dot
 php -l <Datei>
 ```

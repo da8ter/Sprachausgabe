@@ -13,6 +13,8 @@ Eine **Zentrale** (`SprachausgabeZentrale`, SPAZ, Splitter) kennt die Ausgabeger
 - **Rückgabe statt Ausnahme:** `SPAZ_Speak`/`SPAZ_SpeakUrgent`/`SPAA_Trigger` liefern leer, wenn eingereiht, sonst den Grund. Skripte können so ohne `try` reagieren.
 - **Zeitauslöser als eigenes zyklisches Ereignis** unter der Ansage (Ident fest, versteckt), nicht als Modul-Timer: lange Timer verhungern bei Reloads und zählen nach jedem `SetTimerInterval` neu (Plattformwissen `timer.md`).
 - **Bedingungen mit Symcons eigenem Editor** (`SelectCondition`, `IPS_IsConditionPassing`); eine nicht auswertbare Bedingung zählt als „nicht erfüllt“ und wird protokolliert.
+- **Auslöser aus dem Bedingungs-Dialog** (seit 08.10.2026, Nutzerwunsch): eine Variablenregel (`SelectCondition` mit `multi: false`, Wertefeld passend zum Variablentyp) plus Auslöse-Art „wenn erfüllt / solange erfüllt / jede Aktualisierung / jede Änderung“. Ausgewertet in `libs/SpeechTrigger.php` (`rule`, `passes`, `firesRule`); „wenn erfüllt“ feuert nur beim Übergang. Alte Instanzen (Variable, Regel, Wert als Text) stellt `convertLegacyTrigger` einmal um und übernimmt über den Timer `Reapply` – ein `IPS_ApplyChanges` der eigenen Instanz in `ApplyChanges` lehnt Symcon ab.
+- **Text-Vorschau** im Formular (`SPAA_Preview`): alle Varianten mit ersetzten Platzhaltern, auch für ungespeicherte Formularwerte (onClick bekommt die Felder als Variablen).
 - **Zielliste im Ansage-Formular** mit `save: true` an der Namensspalte – sonst speichert Symcon nur die Häkchen und die Namen fallen still weg (Plattformwissen `formulare.md`).
 - **Einmal-Vorbelegung über ein Attribut** (`Initialized`): `MASTER` an, Lautstärke 100 % bzw. `ACTIVE` an. `Create` läuft bei jedem Laden und darf Nutzerwerte nicht zurücksetzen.
 
@@ -28,4 +30,4 @@ Eine **Zentrale** (`SprachausgabeZentrale`, SPAZ, Splitter) kennt die Ausgabeger
 
 - Eine frisch per Module Control installierte Bibliothek registriert ihre Präfix-Funktionen sofort; einen Kernelstart braucht es nur für neue Funktionen einer schon geladenen Bibliothek (beobachtet 01.10.2026, nicht am Code prüfbar; zur Reload-Grenze siehe Plattformwissen `module-lebenszyklus.md`).
 
-Stand: geprüft gegen den Code am 08.10.2026
+Stand: geprüft gegen den Code am 08.10.2026 (Auslöser-Umbau am selben Tag)
