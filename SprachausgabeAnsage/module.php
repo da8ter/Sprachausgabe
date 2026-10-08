@@ -44,6 +44,8 @@ class SprachausgabeAnsage extends IPSModuleStrict
             'PRESENTATION' => VARIABLE_PRESENTATION_DATE_TIME,
         ], 20);
         $this->RegisterAttributeBoolean('Initialized', false);
+        // Symcon rejects IPS_ApplyChanges of the own instance inside ApplyChanges (re-entrant): apply again via timer
+        $this->RegisterTimer('Reapply', 0, 'IPS_ApplyChanges($_IPS[\'TARGET\']);');
 
         $this->ConnectParent(self::ZENTRALE_GUID);
     }
@@ -59,8 +61,10 @@ class SprachausgabeAnsage extends IPSModuleStrict
             $this->RegisterMessage(0, IPS_KERNELSTARTED);
             return;
         }
+        @$this->SetTimerInterval('Reapply', 0);
         if ($this->convertLegacyTrigger()) {
-            return; // ApplyChanges ran again with the converted properties
+            $this->SetTimerInterval('Reapply', 100);
+            return; // applied again by the timer, with the converted properties
         }
 
         foreach ($this->GetMessageList() as $sender => $messages) {
@@ -295,7 +299,6 @@ class SprachausgabeAnsage extends IPSModuleStrict
         IPS_SetProperty($this->InstanceID, 'TriggerCondition', $new['condition']);
         IPS_SetProperty($this->InstanceID, 'TriggerMode', $new['mode']);
         IPS_SetProperty($this->InstanceID, 'TriggerVariable', 0); // guard: converts exactly once
-        IPS_ApplyChanges($this->InstanceID);
         return true;
     }
 
