@@ -48,6 +48,18 @@ final class SpeechText
         }, $text);
     }
 
+    /** Vorschau fürs Formular: jede Variante gerendert, eine je Zeile; {old} bleibt leer (kein alter Wert). */
+    public static function preview(string $texts, int $triggerId, string $empty): string
+    {
+        $variants = self::variants($texts);
+        if ($variants === []) {
+            return $empty;
+        }
+        $now = time();
+        $lines = array_map(static fn(string $v): string => self::render($v, $triggerId, null, $now), $variants);
+        return count($lines) === 1 ? $lines[0] : implode("\n", array_map(static fn(string $l): string => '• ' . $l, $lines));
+    }
+
     /** Ein alter Wert lässt sich nicht über GetValueFormatted formatieren; Bool und Zahlen roh. */
     private static function formatOld(int $triggerId, mixed $old): string
     {

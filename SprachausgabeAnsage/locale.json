@@ -46,7 +46,12 @@
             "global condition not met": "globale Bedingung nicht erfüllt",
             "same announcement within the cooldown": "gleiche Ansage innerhalb der Sperrfrist",
             "queue full": "Warteschlange voll",
-            "empty text": "leerer Text"
+            "empty text": "leerer Text",
+            "when the rule becomes true": "wenn die Regel erfüllt wird",
+            "on every update while the rule is true": "bei jeder Aktualisierung, solange die Regel erfüllt ist",
+            "on every update of the variable (rule ignored)": "bei jeder Aktualisierung der Variable (Regel egal)",
+            "on every change of the variable (rule ignored)": "bei jeder Änderung der Variable (Regel egal)",
+            "Preview text": "Text-Vorschau"
         }
     }
 }

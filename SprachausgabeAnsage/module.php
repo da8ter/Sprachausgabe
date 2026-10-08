@@ -19,6 +19,9 @@ class SprachausgabeAnsage extends IPSModuleStrict
     public function Create(): void
     {
         parent::Create();
+        $this->RegisterPropertyString('TriggerCondition', '');
+        $this->RegisterPropertyInteger('TriggerMode', SpeechTrigger::MODE_BECOMES);
+        // before 10/2026: variable, rule and value as text; only read to convert old instances
         $this->RegisterPropertyInteger('TriggerVariable', 0);
         $this->RegisterPropertyInteger('TriggerRule', SpeechTrigger::EQUALS);
         $this->RegisterPropertyString('TriggerValue', '');
@@ -56,6 +59,9 @@ class SprachausgabeAnsage extends IPSModuleStrict
             $this->RegisterMessage(0, IPS_KERNELSTARTED);
             return;
         }
+        if ($this->convertLegacyTrigger()) {
+            return; // ApplyChanges ran again with the converted properties
+        }
 
         foreach ($this->GetMessageList() as $sender => $messages) {
             foreach ($messages as $message) {
@@ -64,7 +70,7 @@ class SprachausgabeAnsage extends IPSModuleStrict
                 }
             }
         }
-        $trigger = $this->ReadPropertyInteger('TriggerVariable');
+        $trigger = $this->triggerVariable();
         if ($trigger > 0 && @IPS_VariableExists($trigger)) {
             $this->RegisterMessage($trigger, VM_UPDATE);
             $this->RegisterReference($trigger);
@@ -88,20 +94,11 @@ class SprachausgabeAnsage extends IPSModuleStrict
             $this->ApplyChanges();
             return;
         }
-        if ($Message !== VM_UPDATE || $SenderID !== $this->ReadPropertyInteger('TriggerVariable')) {
+        $rule = SpeechTrigger::rule($this->ReadPropertyString('TriggerCondition'));
+        if ($Message !== VM_UPDATE || $rule === null || $SenderID !== $rule['variableID']) {
             return;
         }
-        $var = @IPS_GetVariable($SenderID);
-        $type = is_array($var) ? (int)$var['VariableType'] : VARIABLETYPE_STRING;
-        $fires = SpeechTrigger::fires(
-            $this->ReadPropertyInteger('TriggerRule'),
-            $this->ReadPropertyString('TriggerValue'),
-            $type,
-            $Data[0] ?? null,
-            (bool)($Data[1] ?? false),
-            $Data[2] ?? null,
-            $this->ReadPropertyBoolean('Repeat')
-        );
+        $fires = SpeechTrigger::firesRule($this->ReadPropertyInteger('TriggerMode'), $rule, $Data[0] ?? null, (bool)($Data[1] ?? false), $Data[2] ?? null);
         if ($fires) {
             $this->announce($Data[2] ?? null, false);
         }
@@ -128,6 +125,12 @@ class SprachausgabeAnsage extends IPSModuleStrict
         return $this->announce(null, false);
     }
 
+    /** Formular: alle Textvarianten mit ersetzten Platzhaltern zeigen (Werte aus dem Formular, auch ungespeichert). */
+    public function Preview(string $Texts, string $TriggerCondition): void
+    {
+        echo SpeechText::preview($Texts, SpeechTrigger::rule($TriggerCondition)['variableID'] ?? 0, $this->Translate('No text entered'));
+    }
+
     /** Formular: einmal sprechen, ohne Aktiv-Schalter und Bedingung. */
     public function Test(): void
     {
@@ -137,27 +140,25 @@ class SprachausgabeAnsage extends IPSModuleStrict
 
     public function GetConfigurationForm(): string
     {
-        $rules = [];
-        foreach ([SpeechTrigger::ON_UPDATE => 'on every update', SpeechTrigger::ON_CHANGE => 'on change', SpeechTrigger::EQUALS => 'equals value',
-            SpeechTrigger::NOT_EQUALS => 'differs from value', SpeechTrigger::ABOVE => 'above limit', SpeechTrigger::BELOW => 'below limit'] as $value => $caption) {
-            $rules[] = ['caption' => $caption, 'value' => $value];
+        $modes = [];
+        foreach (SpeechTrigger::modeCaptions() as $value => $caption) {
+            $modes[] = ['caption' => $caption, 'value' => $value];
         }
         return (string)json_encode([
             'elements' => [
                 ['type' => 'ExpansionPanel', 'caption' => 'Trigger', 'expanded' => true, 'items' => [
-                    ['type' => 'SelectVariable', 'name' => 'TriggerVariable', 'caption' => 'Variable'],
-                    ['type' => 'RowLayout', 'items' => [
-                        ['type' => 'Select', 'name' => 'TriggerRule', 'caption' => 'Rule', 'options' => $rules],
-                        ['type' => 'ValidationTextBox', 'name' => 'TriggerValue', 'caption' => 'Value / limit'],
-                        ['type' => 'CheckBox', 'name' => 'Repeat', 'caption' => 'also when repeated'],
-                    ]],
+                    ['type' => 'SelectCondition', 'name' => 'TriggerCondition', 'caption' => 'Rule', 'multi' => false],
+                    ['type' => 'Select', 'name' => 'TriggerMode', 'caption' => 'Trigger', 'options' => $modes, 'width' => '100%'],
                     ['type' => 'RowLayout', 'items' => [
                         ['type' => 'CheckBox', 'name' => 'TimeEnabled', 'caption' => 'additionally daily at'],
                         ['type' => 'SelectTime', 'name' => 'Time', 'caption' => 'Time'],
                     ]],
                 ]],
                 ['type' => 'ValidationTextBox', 'name' => 'Texts', 'caption' => 'Text (one variant per line)', 'multiline' => true, 'width' => '100%'],
-                ['type' => 'Label', 'caption' => 'Placeholders: {value} {old} {name} {var:12345} {time} {date}'],
+                ['type' => 'RowLayout', 'items' => [
+                    ['type' => 'Label', 'caption' => 'Placeholders: {value} {old} {name} {var:12345} {time} {date}'],
+                    ['type' => 'Button', 'caption' => 'Preview text', 'onClick' => 'SPAA_Preview($id, $Texts, $TriggerCondition);'],
+                ]],
                 ['type' => 'ExpansionPanel', 'caption' => 'Condition', 'items' => [
                     ['type' => 'SelectCondition', 'name' => 'Condition', 'multi' => true],
                 ]],
@@ -199,7 +200,7 @@ class SprachausgabeAnsage extends IPSModuleStrict
         if ($template === '') {
             return 'no text';
         }
-        $text = SpeechText::render($template, $this->ReadPropertyInteger('TriggerVariable'), $old, time());
+        $text = SpeechText::render($template, $this->triggerVariable(), $old, time());
         if (!$this->HasActiveParent()) {
             $this->LogMessage($this->Translate('No hub connected') . ': ' . $text, KL_WARNING);
             return 'no hub connected';
@@ -274,6 +275,28 @@ class SprachausgabeAnsage extends IPSModuleStrict
         IPS_SetEventCyclicTimeFrom($eid, (int)($time['hour'] ?? 7), (int)($time['minute'] ?? 0), (int)($time['second'] ?? 0));
         IPS_SetEventScript($eid, 'SPAA_Trigger(' . $this->InstanceID . ');');
         IPS_SetEventActive($eid, true);
+    }
+
+    private function triggerVariable(): int
+    {
+        return SpeechTrigger::rule($this->ReadPropertyString('TriggerCondition'))['variableID'] ?? 0;
+    }
+
+    /** Alte Instanzen (Variable, Regel, Wert als Text) einmal auf die Regel des Bedingungs-Dialogs umstellen. */
+    private function convertLegacyTrigger(): bool
+    {
+        $variable = $this->ReadPropertyInteger('TriggerVariable');
+        if ($variable <= 0 || $this->ReadPropertyString('TriggerCondition') !== '') {
+            return false;
+        }
+        $var = @IPS_GetVariable($variable);
+        $new = SpeechTrigger::legacyToCondition($variable, $this->ReadPropertyInteger('TriggerRule'), $this->ReadPropertyString('TriggerValue'),
+            $this->ReadPropertyBoolean('Repeat'), is_array($var) ? (int)$var['VariableType'] : VARIABLETYPE_STRING);
+        IPS_SetProperty($this->InstanceID, 'TriggerCondition', $new['condition']);
+        IPS_SetProperty($this->InstanceID, 'TriggerMode', $new['mode']);
+        IPS_SetProperty($this->InstanceID, 'TriggerVariable', 0); // guard: converts exactly once
+        IPS_ApplyChanges($this->InstanceID);
+        return true;
     }
 
     private function conditionPassing(string $condition): bool
