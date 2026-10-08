@@ -2,7 +2,7 @@
 
 Ansagen für Symcon: Auslöser, Bedingung, Text, ein oder mehrere Ausgabegeräte; dazu eine KI-Stimme und die Anbindung von Echo Dots der 2. Generation mit der Firmware EchoMuse (Ansagen und Sprachgespräche über SymDo). Öffentliches Repo `da8ter/Sprachausgabe`, Zweig `main`.
 
-Projektwissen (Entscheidungen, Protokoll-Eigenheiten, Test-Rezepte): **`docs/README.md`**. Offenes und bekannte Widersprüche: `docs/stand.md`. Betriebsdaten dieses Rechners stehen in `CLAUDE.local.md` (nicht eingecheckt).
+Projektwissen (Entscheidungen, Protokoll-Eigenheiten, Test-Rezepte): **`.claude/docs/README.md`**. Offenes und bekannte Widersprüche: `.claude/docs/stand.md`. Betriebsdaten dieses Rechners stehen in `CLAUDE.local.md` (nicht eingecheckt).
 
 ## Aufbau
 
@@ -24,7 +24,7 @@ php tests/echomuse_test.php       # Gateway, Gerät, Voice mit Attrappen-Dot
 php -l <Datei>
 ```
 
-`smoke_test.php` und `echomuse_test.php` brauchen den Prüfstand-Kernel aus dem Nachbarordner `../LGThinQ/tests/bootstrap.php`. Live-Proben mit Attrappen: `docs/testen/pruefstaende.md`.
+`smoke_test.php` und `echomuse_test.php` brauchen den Prüfstand-Kernel aus dem Nachbarordner `../LGThinQ/tests/bootstrap.php`. Live-Proben mit Attrappen: `.claude/docs/testen/pruefstaende.md`.
 
 ## Regeln
 
@@ -34,4 +34,4 @@ php -l <Datei>
 - **Doku nachziehen:** Ändert ein Commit eine Entscheidung aus `docs/`, wird die Datei im selben Commit angepasst und ihr „Stand“-Datum erneuert.
 - **Öffentliches Repo:** keine IP-Adressen, Ports lokaler Systeme, Instanz-IDs, Token, API-Schlüssel, Stimmen-IDs eines privaten Kontos, Gerätekennungen echter Dots, Pfade unter `/Users/` – weder im Code noch in Tests oder Doku. Fixtures mit Platzhaltern.
 - **Echte Geräte:** jede Aktion an einem echten Dot oder eine hörbare Probe nur auf Zusage des Nutzers.
-- **Symcon-Plattformwissen** (Module Strict, HEX-Datenfluss, Hooks, Timer, Nebenläufigkeit) steht geprüft in der SymDo-Bibliothek: `../List/docs/plattform/` bzw. https://github.com/da8ter/SymDo-Family-Organizer/tree/SymDo-Beta/docs/plattform – dort nachlesen, nicht hierher kopieren.
+- **Symcon-Plattformwissen** (Module Strict, HEX-Datenfluss, Hooks, Timer, Nebenläufigkeit) steht geprüft in der SymDo-Bibliothek: `../List/.claude/docs/plattform/` bzw. https://github.com/da8ter/SymDo-Family-Organizer/tree/SymDo-Beta/.claude/docs/plattform – dort nachlesen, nicht hierher kopieren.

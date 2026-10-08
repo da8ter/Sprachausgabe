@@ -17,7 +17,7 @@ Jede Datei endet mit „Stand: geprüft gegen den Code am …“. Ändert ein Co
 
 ## Symcon-Plattform
 
-Allgemeines, gemessenes Symcon-Verhalten steht in der SymDo-Bibliothek: [docs/plattform](https://github.com/da8ter/SymDo-Family-Organizer/tree/SymDo-Beta/docs/plattform) (lokal `../../List/docs/plattform/`). Für diese Bibliothek wichtig: `module-strict-und-php.md` (HEX-Datenfluss), `hooks-und-grenzen.md` (`RegisterHook` ohne `/hook/`, Ausgabegrenze), `instanzen-und-nebenlaeufigkeit.md` (Verbinden braucht beide GUID-Richtungen, Abarbeitung je Instanz), `timer.md`.
+Allgemeines, gemessenes Symcon-Verhalten steht in der SymDo-Bibliothek: [docs/plattform](https://github.com/da8ter/SymDo-Family-Organizer/tree/SymDo-Beta/.claude/docs/plattform) (lokal `../../List/.claude/docs/plattform/`). Für diese Bibliothek wichtig: `module-strict-und-php.md` (HEX-Datenfluss), `hooks-und-grenzen.md` (`RegisterHook` ohne `/hook/`, Ausgabegrenze), `instanzen-und-nebenlaeufigkeit.md` (Verbinden braucht beide GUID-Richtungen, Abarbeitung je Instanz), `timer.md`.
 
 ## Stand
 
