@@ -1,0 +1,36 @@
+{
+    "translations": {
+        "de": {
+            "Push Zentrale": "Push - Zentrale",
+            "Push Nachricht": "Push - Nachricht",
+            "Notifications": "Benachrichtigungen",
+            "Last notification": "Letzte Benachrichtigung",
+            "Last notification at": "Letzte Benachrichtigung um",
+            "%d recipients": "%d Empfänger",
+            "Unknown action": "Unbekannte Aktion",
+            "Recipient not found": "Empfänger nicht gefunden",
+            "This is a test notification.": "Das ist eine Testbenachrichtigung.",
+            "Sent": "Gesendet",
+            "Failed": "Fehlgeschlagen",
+            "type:visu": "Kachel-Visualisierung",
+            "type:wfc": "WebFront (alt)",
+            "Recipients": "Empfänger",
+            "Name": "Name",
+            "Type": "Art",
+            "Visualization": "Visualisierung",
+            "A push always goes to every device of the chosen visualization. For single persons or devices create one visualization each and enable only those devices in its \"Notifications\" tab.": "Eine Push-Nachricht geht immer an alle Geräte der gewählten Visualisierung. Für einzelne Personen oder Geräte je eine eigene Visualisierung anlegen und dort im Reiter \"Benachrichtigungen\" nur die gewünschten Geräte einschalten.",
+            "Global condition": "Globale Bedingung",
+            "Same notification at most every": "Gleiche Benachrichtigung höchstens alle",
+            "Recipient": "Empfänger",
+            "Send test": "Test senden",
+            "Unknown recipient": "Unbekannter Empfänger",
+            "Notification failed": "Benachrichtigung fehlgeschlagen",
+            "Condition could not be evaluated": "Bedingung konnte nicht ausgewertet werden",
+            "no visualization selected": "keine Visualisierung gewählt",
+            "tile visualization not available": "Kachel-Visualisierung nicht verfügbar",
+            "WebFront not available": "WebFront nicht verfügbar",
+            "unknown type": "unbekannte Art",
+            "sending failed": "Senden fehlgeschlagen"
+        }
+    }
+}

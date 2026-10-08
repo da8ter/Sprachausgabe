@@ -189,6 +189,152 @@ check(is_array($targets) && array_column($targets['values'], 'name') === ['Küch
     'Zielliste aus den Geräten der Zentrale, Häkchen übernommen, Namensspalte mit save');
 check(is_array(json_decode(Kernel::$instances[$hub]["object"]->GetConfigurationForm(), true)), 'Formular der Zentrale ist gültiges JSON');
 
+section('Auslöser im Bedingungs-Dialog: Übernahme alter Instanzen');
+$conv = SpeechTrigger::rule(IPS_GetProperty($a, 'TriggerCondition'));
+check(IPS_GetProperty($a, 'TriggerVariable') === 0 && $conv !== null && $conv['variableID'] === $wm && $conv['comparison'] === 0 && $conv['value'] === 'Finished'
+    && IPS_GetProperty($a, 'TriggerMode') === SpeechTrigger::MODE_BECOMES, 'Ansage „Wert gleich Finished“ wurde zur Regel „= Finished, wenn erfüllt“');
+$conv = SpeechTrigger::rule(IPS_GetProperty($b, 'TriggerCondition'));
+check($conv !== null && $conv['comparison'] === 2 && $conv['value'] == 80, 'Ansage „über Grenzwert 80“ wurde zur Regel „> 80“');
+$bv = IPS_CreateVariable(VARIABLETYPE_BOOLEAN);
+$c = Kernel::createInstance(ANN);
+IPS_SetProperty($c, 'TriggerCondition', SpeechTrigger::ruleJson($bv, 0, true));
+IPS_SetProperty($c, 'Texts', 'Tür offen');
+IPS_ApplyChanges($c);
+$GLOBALS['calls'] = [];
+$fire($bv, true);
+Kernel::advance(1);
+check(count($taken()) === 1, 'neue Regel „= true“: beim Übergang gesprochen');
+$fire($bv, true);
+Kernel::advance(40);
+check($taken() === [], 'gleicher Wert erneut: nichts (wenn die Regel erfüllt wird)');
+IPS_SetProperty($c, 'TriggerMode', SpeechTrigger::MODE_WHILE);
+IPS_ApplyChanges($c);
+IPS_SetProperty($hub, 'Cooldown', 0); // the modules use the wall clock, the kernel clock does not move it
+IPS_ApplyChanges($hub);
+$fire($bv, true);
+Kernel::advance(40);
+$fire($bv, true);
+Kernel::advance(40);
+check(count($taken()) === 2, 'Auslöse-Art „solange erfüllt“: jede Aktualisierung');
+IPS_SetProperty($hub, 'Cooldown', 30);
+IPS_ApplyChanges($hub);
+check(SpeechTrigger::passes(['comparison' => 5, 'value' => 12, 'type' => 0], 12.0) && !SpeechTrigger::passes(['comparison' => 2, 'value' => 12, 'type' => 0], 'x'),
+    '≤ vergleicht Zahlen, > mit Text ist nie erfüllt');
+
+section('Push: Zentrale, Empfänger, Nachricht');
+const PHUB = '{5C17B714-C9BD-4E8E-B429-E52B6EA84FF5}';
+const PMSG = '{B7189F7A-989B-4910-B68A-14E2E043DE6E}';
+$GLOBALS['push'] = [];
+function VISU_PostNotificationEx(int $id, string $title, string $text, string $icon, string $sound, int $target): int { $GLOBALS['push'][] = ['visu', $id, $title, $text, $icon, $sound, $target]; return 1; }
+function WFC_PushNotification(int $id, string $title, string $text, string $sound, int $target): bool { $GLOBALS['push'][] = ['wfc', $id, $title, $text]; return true; }
+function IPS_RunScriptWaitEx(int $id, array $params): string { $GLOBALS['scriptParams'] = $params; return '  Wasser im ' . ($params['VALUE'] ? 'Keller' : '?') . '  '; }
+$pushed = static function (): array { $p = $GLOBALS['push']; $GLOBALS['push'] = []; return $p; };
+$visuS = Kernel::createInstance('{00000000-0000-0000-0000-0000000000E0}');
+$visuP = Kernel::createInstance('{00000000-0000-0000-0000-0000000000E0}');
+$ph = Kernel::createInstance(PHUB);
+IPS_SetProperty($ph, 'Recipients', json_encode([
+    ['name' => 'Stephan', 'type' => 'visu', 'instance' => $visuS],
+    ['name' => 'Simone', 'type' => 'wfc', 'instance' => $visuP],
+]));
+IPS_SetProperty($ph, 'Cooldown', 0);
+IPS_ApplyChanges($ph);
+check(IPS_GetInstance($ph)['InstanceStatus'] === IS_ACTIVE && World::value($ph, 'MASTER') === true, 'Zentrale aktiv, Hauptschalter an');
+$door = IPS_CreateVariable(VARIABLETYPE_BOOLEAN);
+IPS_SetName($door, 'Haustür');
+$pm = Kernel::createInstance(PMSG);
+check(Kernel::$instances[$pm]['connection'] === $ph, 'Nachricht verbindet sich mit der Zentrale');
+check(IPS_GetInstance($pm)['InstanceStatus'] === 201, 'ohne Text: Status 201');
+IPS_SetProperty($pm, 'TriggerCondition', SpeechTrigger::ruleJson($door, 0, true));
+IPS_SetProperty($pm, 'Title', 'Haustür');
+IPS_SetProperty($pm, 'Texts', 'Die {name} wurde geöffnet');
+IPS_SetProperty($pm, 'Icon', 'Door');
+IPS_SetProperty($pm, 'Sound', 'alarm');
+IPS_ApplyChanges($pm);
+$rs = World::varId($pm, 'R_' . substr(md5('stephan'), 0, 10));
+$rp = World::varId($pm, 'R_' . substr(md5('simone'), 0, 10));
+check(IPS_GetInstance($pm)['InstanceStatus'] === IS_ACTIVE && $rs > 0 && $rp > 0 && GetValue($rs) === true && GetValue($rp) === true,
+    'je Empfänger ein Schalter, neu angelegt = an');
+check(IPS_GetName($rs) === 'Stephan' && World::variable($pm, 'R_' . substr(md5('stephan'), 0, 10))['presentation'] !== [], 'Schalter heißt wie der Empfänger und hat eine Darstellung');
+$fire($door, true);
+check($pushed() === [['visu', $visuS, 'Haustür', 'Die Haustür wurde geöffnet', 'Door', 'alarm', 0], ['wfc', $visuP, 'Haustür', 'Die Haustür wurde geöffnet']],
+    'Tür auf: Kachel-Visu mit Icon und Ton, WebFront ohne');
+check(World::value($ph, 'LAST_TEXT') === 'Haustür: Die Haustür wurde geöffnet' && World::value($pm, 'LAST_RUN') > 0, 'Letzte Benachrichtigung gesetzt');
+RequestAction($rp, false);
+$fire($door, false);
+$fire($door, true);
+check(array_column($pushed(), 0) === ['visu'], 'Simone abgeschaltet: nur Stephan');
+RequestAction(World::varId($ph, 'MASTER'), false);
+$fire($door, false);
+$fire($door, true);
+check($pushed() === [], 'Hauptschalter aus: nichts');
+RequestAction(World::varId($ph, 'MASTER'), true);
+IPS_SetProperty($ph, 'Recipients', json_encode([['name' => 'Stephan', 'type' => 'visu', 'instance' => $visuS], ['name' => 'Tablet', 'type' => 'visu', 'instance' => $visuP]]));
+IPS_ApplyChanges($ph);
+check(World::varId($pm, 'R_' . substr(md5('simone'), 0, 10)) === 0 && World::varId($pm, 'R_' . substr(md5('tablet'), 0, 10)) > 0 && GetValue($rs) === true,
+    'Empfängerliste geändert: Simone entfernt, Tablet angelegt, Stephan behält seinen Schalter');
+
+section('Push: Verzögerung, Wiederholung, Textskript, Sperrfrist');
+$win = IPS_CreateVariable(VARIABLETYPE_BOOLEAN);
+$pw = Kernel::createInstance(PMSG);
+IPS_SetProperty($pw, 'TriggerCondition', SpeechTrigger::ruleJson($win, 0, true));
+IPS_SetProperty($pw, 'Texts', 'Fenster schließen!');
+IPS_SetProperty($pw, 'DelaySeconds', 3600);
+IPS_SetProperty($pw, 'RepeatMinutes', 60);
+IPS_ApplyChanges($pw);
+$pushed();
+$fire($win, true);
+check($pushed() === [], 'Fenster auf: noch nichts (Verzögerung)');
+Kernel::advance(1800);
+$fire($win, true); // repeated updates must not restart the countdown
+Kernel::advance(1801);
+check(count($pushed()) === 2, 'nach einer Stunde: an beide Empfänger');
+Kernel::advance(3601);
+check(count($pushed()) === 2, 'eine Stunde später: Wiederholung');
+$fire($win, false);
+Kernel::advance(7300);
+check($pushed() === [], 'Fenster zu: keine weitere Erinnerung');
+$fire($win, true);
+Kernel::advance(600);
+$fire($win, false);
+Kernel::advance(3600);
+check($pushed() === [], 'vor Ablauf wieder zu: nichts');
+$GLOBALS['scripts'][50003] = true;
+$alarm = IPS_CreateVariable(VARIABLETYPE_BOOLEAN);
+$pa = Kernel::createInstance(PMSG);
+IPS_SetProperty($pa, 'TriggerCondition', SpeechTrigger::ruleJson($alarm, 0, true));
+IPS_SetProperty($pa, 'TextScript', 50003);
+IPS_ApplyChanges($pa);
+check(IPS_GetInstance($pa)['InstanceStatus'] === IS_ACTIVE, 'Textskript statt Text: aktiv');
+$fire($alarm, true);
+$p = $pushed();
+check(($p[0][3] ?? '') === 'Wasser im Keller' && ($GLOBALS['scriptParams']['VARIABLE'] ?? 0) === $alarm, 'Text kommt aus dem Skript (getrimmt), Skript kennt die Auslöser-Variable');
+IPS_SetProperty($ph, 'Cooldown', 60);
+IPS_ApplyChanges($ph);
+$fire($alarm, false);
+$fire($alarm, true);
+$fire($alarm, false);
+$fire($alarm, true);
+check($pushed() === [], 'Sperrfrist 60 s: erneutes Auslösen derselben Nachricht kurz danach abgewiesen');
+check(PushOutputs::cut(str_repeat('a', 40), PushOutputs::TITLE_MAX) === str_repeat('a', 31) . '…', 'zu langer Titel wird auf 32 Zeichen gekürzt');
+check(PushOutputs::send(['type' => 'visu', 'instance' => 0], 't', 'x', '', '', 0) === 'no visualization selected', 'ohne Visualisierung: Grund statt Fehler');
+ob_start();
+PUSHN_Test($pm);
+$out = (string)ob_get_clean();
+check(str_contains($out, 'Gesendet') && count($pushed()) >= 1, 'Testknopf sendet: ' . trim($out));
+ob_start();
+PUSHN_Preview($pm, '{name} offen', "Die {name} steht {value}", 0, SpeechTrigger::ruleJson($door, 0, true));
+$out = (string)ob_get_clean();
+check($out === "Haustür offen\n\nDie Haustür steht An", 'Vorschau zeigt Titel und Text mit ersetzten Platzhaltern (ungespeicherte Formularwerte): ' . str_replace("\n", ' | ', $out));
+ob_start();
+SPAA_Preview($b, "A {value}\nB {name}", SpeechTrigger::ruleJson($t, 2, 80));
+$out = (string)ob_get_clean();
+check($out === "• A 99,0\n• B Füllstand", 'Ansage-Vorschau zeigt jede Variante: ' . str_replace("\n", ' | ', $out));
+ob_start();
+SPAA_Preview($b, '', '');
+check(str_contains((string)ob_get_clean(), 'Kein Text'), 'Vorschau ohne Text nennt das');
+check(is_array(json_decode(Kernel::$instances[$pm]['object']->GetConfigurationForm(), true)) && is_array(json_decode(Kernel::$instances[$ph]['object']->GetConfigurationForm(), true)),
+    'Formulare sind gültiges JSON');
+
 section('KI-Stimme: alle fünf Anbieter (Netz als Attrappe)');
 $GLOBALS['http'] = [];
 $GLOBALS['httpAnswer'] = null;
