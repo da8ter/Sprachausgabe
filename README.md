@@ -87,6 +87,7 @@ PUSHZ_Send(int $PushZentraleID, string $Titel, string $Text, string $Empfaenger)
 
 ## 6. Versionshistorie
 
+- **0.2, Build 5**: Wochenpläne für Ansagen (gemeinsame Sprechzeiten der Zentrale, eigener Plan je Ansage).
 - **0.2, Build 4**: Platzhalter im Formular als Textfeld zum Kopieren, je Zeile mit Erklärung.
 - **0.2, Build 3**: Vorschau- und Test-Knöpfe zeigen ihren Text als Meldung statt als Warnung mit Dateipfad (Funktionen geben den Text zurück, der Knopf gibt ihn aus).
 - **0.2**: Ansagen als Liste in der Zentrale (Dialog je Ansage, Text-Vorschau, Testansage, Übernahme bestehender Ansage-Instanzen per Knopf); Auslöser über den Bedingungs-Dialog der Konsole mit Auslöse-Art; neues Modul **Push Zentrale** für Pushbenachrichtigungen (Empfänger je Visualisierung, Nachrichtenliste, Schalter je Nachricht und Person, Verzögerung und Wiederholung, Textskript) samt Übernahme-Werkzeug `tools/migrate_push.php`; EchoMuse Gateway, Gerät und Voice.
