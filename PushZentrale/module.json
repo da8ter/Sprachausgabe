@@ -1,16 +1,12 @@
 {
     "id": "{5C17B714-C9BD-4E8E-B429-E52B6EA84FF5}",
     "name": "Push Zentrale",
-    "type": 2,
+    "type": 3,
     "vendor": "Stephan Sprick",
     "aliases": [],
     "parentRequirements": [],
-    "childRequirements": [
-        "{8CA7C83F-7320-466A-AAC3-DC2A14A2AFC1}"
-    ],
-    "implemented": [
-        "{ADF206D0-BC6E-4C0A-842B-514A4F32EF92}"
-    ],
+    "childRequirements": [],
+    "implemented": [],
     "prefix": "PUSHZ",
     "url": "https://github.com/da8ter/Sprachausgabe"
 }
