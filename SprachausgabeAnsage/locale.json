@@ -51,7 +51,14 @@
             "on every update while the rule is true": "bei jeder Aktualisierung, solange die Regel erfüllt ist",
             "on every update of the variable (rule ignored)": "bei jeder Aktualisierung der Variable (Regel egal)",
             "on every change of the variable (rule ignored)": "bei jeder Änderung der Variable (Regel egal)",
-            "Preview text": "Text-Vorschau"
+            "Preview text": "Text-Vorschau",
+            "Placeholders (select and copy)": "Platzhalter (markieren und kopieren)",
+            "new value of the trigger variable (formatted)": "neuer Wert der Auslöser-Variable (formatiert)",
+            "previous value of the trigger variable": "vorheriger Wert der Auslöser-Variable",
+            "name of the trigger variable": "Name der Auslöser-Variable",
+            "formatted value of any variable (replace 12345 with its ID)": "formatierter Wert einer beliebigen Variable (12345 durch ihre ID ersetzen)",
+            "time (HH:MM)": "Uhrzeit (HH:MM)",
+            "date (DD.MM.YYYY)": "Datum (TT.MM.JJJJ)"
         }
     }
 }

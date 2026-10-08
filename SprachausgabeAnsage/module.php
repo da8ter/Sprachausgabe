@@ -160,7 +160,7 @@ class SprachausgabeAnsage extends IPSModuleStrict
                 ]],
                 ['type' => 'ValidationTextBox', 'name' => 'Texts', 'caption' => 'Text (one variant per line)', 'multiline' => true, 'width' => '100%'],
                 ['type' => 'RowLayout', 'items' => [
-                    ['type' => 'Label', 'caption' => 'Placeholders: {value} {old} {name} {var:12345} {time} {date}'],
+                    ['type' => 'ValidationTextBox', 'caption' => 'Placeholders (select and copy)', 'value' => SpeechText::placeholderHelp(fn(string $t): string => $this->Translate($t)), 'multiline' => true, 'width' => '100%'],
                     ['type' => 'Button', 'caption' => 'Preview text', 'onClick' => 'echo SPAA_Preview($id, $Texts, $TriggerCondition);'],
                 ]],
                 ['type' => 'ExpansionPanel', 'caption' => 'Condition', 'items' => [

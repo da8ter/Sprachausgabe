@@ -30,7 +30,7 @@ trait PushForm
             ['type' => 'ExpansionPanel', 'caption' => 'Message', 'expanded' => true, 'items' => [
                 ['type' => 'ValidationTextBox', 'name' => 'Title', 'caption' => 'Title (max. 32 characters)', 'width' => '100%'],
                 ['type' => 'ValidationTextBox', 'name' => 'Texts', 'caption' => 'Text (one variant per line)', 'multiline' => true, 'width' => '100%'],
-                ['type' => 'Label', 'caption' => 'Placeholders: {value} {old} {name} {var:12345} {time} {date}'],
+                ['type' => 'ValidationTextBox', 'caption' => 'Placeholders (select and copy)', 'value' => SpeechText::placeholderHelp(fn(string $t): string => $this->Translate($t)), 'multiline' => true, 'width' => '100%'],
                 ['type' => 'SelectScript', 'name' => 'TextScript', 'caption' => 'or text from script (its output is the text)', 'value' => 0],
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'SelectIcon', 'name' => 'Icon', 'caption' => 'Icon'],

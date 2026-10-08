@@ -48,6 +48,27 @@ final class SpeechText
         }, $text);
     }
 
+    /**
+     * Platzhalter mit Erklärung, eine je Zeile, für ein Textfeld zum Kopieren im Formular.
+     *
+     * @param callable(string): string $translate
+     */
+    public static function placeholderHelp(callable $translate): string
+    {
+        $lines = [];
+        foreach ([
+            '{value}'     => 'new value of the trigger variable (formatted)',
+            '{old}'       => 'previous value of the trigger variable',
+            '{name}'      => 'name of the trigger variable',
+            '{var:12345}' => 'formatted value of any variable (replace 12345 with its ID)',
+            '{time}'      => 'time (HH:MM)',
+            '{date}'      => 'date (DD.MM.YYYY)',
+        ] as $token => $meaning) {
+            $lines[] = $token . '  –  ' . $translate($meaning);
+        }
+        return implode("\n", $lines);
+    }
+
     /** Vorschau fürs Formular: jede Variante gerendert, eine je Zeile; {old} bleibt leer (kein alter Wert). */
     public static function preview(string $texts, int $triggerId, string $empty): string
     {

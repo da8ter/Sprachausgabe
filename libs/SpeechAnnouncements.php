@@ -199,7 +199,7 @@ trait SpeechAnnouncements
                 ]],
                 ['type' => 'ExpansionPanel', 'caption' => 'Text', 'expanded' => true, 'items' => [
                     ['type' => 'ValidationTextBox', 'name' => 'Texts', 'caption' => 'Text (one variant per line)', 'multiline' => true, 'width' => '100%'],
-                    ['type' => 'Label', 'caption' => 'Placeholders: {value} {old} {name} {var:12345} {time} {date}'],
+                    ['type' => 'ValidationTextBox', 'caption' => 'Placeholders (select and copy)', 'value' => SpeechText::placeholderHelp(fn(string $t): string => $this->Translate($t)), 'multiline' => true, 'width' => '100%'],
                 ]],
                 ['type' => 'ExpansionPanel', 'caption' => 'Outputs (none ticked = default outputs)', 'items' => $targetBoxes ?: [['type' => 'Label', 'caption' => 'No outputs yet']]],
                 ['type' => 'RowLayout', 'items' => [
