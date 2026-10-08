@@ -85,6 +85,7 @@ PUSHZ_Send(int $PushZentraleID, string $Titel, string $Text, string $Empfaenger)
 
 ## 6. Versionshistorie
 
+- **0.2, Build 6**: Sprachausgabe Zentrale ist ein Gerät (kein Splitter mehr) mit Schaltvariable je Ansage; das Modul „Sprachausgabe Ansage“ ist entfernt.
 - **0.2, Build 5**: Wochenpläne für Ansagen (gemeinsame Sprechzeiten der Zentrale, eigener Plan je Ansage).
 - **0.2, Build 4**: Platzhalter im Formular als Textfeld zum Kopieren, je Zeile mit Erklärung.
 - **0.2, Build 3**: Vorschau- und Test-Knöpfe zeigen ihren Text als Meldung statt als Warnung mit Dateipfad (Funktionen geben den Text zurück, der Knopf gibt ihn aus).
