@@ -75,14 +75,14 @@ function SSCK_SendPacket(int $id, string $bytes, string $ip, int $port): bool
 function EchoMuseTestSecondDot(int $gw, Closure $deliver, Closure $request, Closure $send, Closure $register, Closure $take, Closure $json): void
 {
     EMGW_ApproveDevice($gw, 'DOT2DOT2');
-    $deliver('192.168.0.70', 43000, 1);
-    $deliver('192.168.0.70', 43000, 0, $request('/control'));
-    $take('192.168.0.70', 43000);
-    $deliver('192.168.0.70', 43000, 0, $send($register('DOT2DOT2')));
-    $take('192.168.0.70', 43000);
-    $deliver('192.168.0.70', 43000, 0, $send('{"type":"oww_wake","session":3,"barge":false}'));
+    $deliver('192.0.2.70', 43000, 1);
+    $deliver('192.0.2.70', 43000, 0, $request('/control'));
+    $take('192.0.2.70', 43000);
+    $deliver('192.0.2.70', 43000, 0, $send($register('DOT2DOT2')));
+    $take('192.0.2.70', 43000);
+    $deliver('192.0.2.70', 43000, 0, $send('{"type":"oww_wake","session":3,"barge":false}'));
     Kernel::deliverUpdates();
-    $f = $take('192.168.0.70', 43000);
+    $f = $take('192.0.2.70', 43000);
     check(($json($f[0] ?? []))['type'] === 'listen_close' && $json($f[0])['reason'] === 'busy' && $json($f[0])['session'] === 3, 'zweiter Dot weckt bei laufender Sitzung: listen_close busy');
 }
 
@@ -105,7 +105,7 @@ $deliver = static function (string $ip, int $port, int $type, string $bytes = ''
 $request = static fn(string $path): string => "GET $path HTTP/1.1\r\nHost: gw\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nX-EM-Token: t\r\n\r\n";
 $send = static fn(string $json): string => EmWebSocket::clientFrame(EmWebSocket::OP_TEXT, $json);
 $register = static fn(string $id): string => (string)json_encode(['type' => 'register', 'device_id' => $id, 'version' => 'v2.30.1',
-    'capabilities' => ['mic', 'speaker', 'leds', 'buttons'], 'ip' => '192.168.0.50', 'base_os' => 'emos', 'board' => 'biscuit']);
+    'capabilities' => ['mic', 'speaker', 'leds', 'buttons'], 'ip' => '192.0.2.50', 'base_os' => 'emos', 'board' => 'biscuit']);
 /** Was das Gateway an einen Client geschickt hat, als Liste: ['http' => Kopf] oder ['op' => .., 'data' => ..]. */
 $take = static function (string $ip, int $port) use ($fake): array {
     $out = [];
@@ -154,16 +154,16 @@ check(json_decode(Kernel::$instances[$gw]['object']->GetConfigurationForParent()
 check(is_array(json_decode(Kernel::$instances[$gw]['object']->GetConfigurationForm(), true)), 'Formular ist gültiges JSON');
 
 section('Handshake und unbekanntes Gerät');
-$deliver('192.168.0.50', 40001, 1);
-$deliver('192.168.0.50', 40001, 0, $request('/control'));
-$f = $take('192.168.0.50', 40001);
+$deliver('192.0.2.50', 40001, 1);
+$deliver('192.0.2.50', 40001, 0, $request('/control'));
+$f = $take('192.0.2.50', 40001);
 check(count($f) === 1 && str_contains($f[0]['http'] ?? '', '101 Switching Protocols') && str_contains($f[0]['http'], 's3pPLMBiTxaQ9kYGzzhZRbK+xOo='), 'Upgrade beantwortet, Accept-Schlüssel stimmt');
-$deliver('192.168.0.50', 40001, 0, $send($register('G090LF0123456789')));
-$f = $take('192.168.0.50', 40001);
+$deliver('192.0.2.50', 40001, 0, $send($register('G090LF0123456789')));
+$f = $take('192.0.2.50', 40001);
 check(($json($f[0] ?? [])['type'] ?? '') === 'pending' && ($f[1]['op'] ?? 0) === EmWebSocket::OP_CLOSE, 'unbekanntes Gerät: pending, dann Close-Rahmen');
 $status = json_decode(Kernel::$instances[$gw]['attributes']['Pending'], true);
-check(isset($status['G090LF0123456789']) && $status['G090LF0123456789']['ip'] === '192.168.0.50', 'steht in der Liste der Wartenden');
-$deliver('192.168.0.50', 40001, 2);
+check(isset($status['G090LF0123456789']) && $status['G090LF0123456789']['ip'] === '192.0.2.50', 'steht in der Liste der Wartenden');
+$deliver('192.0.2.50', 40001, 2);
 
 section('Freigabe legt das Gerät an');
 check(EMGW_ApproveDevice($gw, 'G090LF0123456789') === '', 'ApproveDevice');
@@ -176,41 +176,41 @@ $dev = $devs[0];
 check(World::value($dev, 'ONLINE') === false, 'noch offline');
 
 section('Anmeldung, Zustand, Tasten');
-$deliver('192.168.0.50', 40002, 1);
-$deliver('192.168.0.50', 40002, 0, $request('/control'));
-$take('192.168.0.50', 40002);
-$deliver('192.168.0.50', 40002, 0, $send($register('G090LF0123456789')));
-$f = $take('192.168.0.50', 40002);
+$deliver('192.0.2.50', 40002, 1);
+$deliver('192.0.2.50', 40002, 0, $request('/control'));
+$take('192.0.2.50', 40002);
+$deliver('192.0.2.50', 40002, 0, $send($register('G090LF0123456789')));
+$f = $take('192.0.2.50', 40002);
 $ack = $json($f[0] ?? []);
 check(($ack['type'] ?? '') === 'ack' && $ack['device_id'] === 'G090LF0123456789' && $ack['features'] === ['output_chain'] && $ack['time_ms'] > 1700000000000, 'ack mit Fähigkeiten und Uhrzeit');
 check(World::value($dev, 'ONLINE') === true && World::value($dev, 'FIRMWARE') === 'v2.30.1', 'Gerät online, Firmware übernommen');
-$deliver('192.168.0.50', 40002, 0, $send('{"type":"volume_state","level":64}'));
+$deliver('192.0.2.50', 40002, 0, $send('{"type":"volume_state","level":64}'));
 check(World::value($dev, 'VOLUME') === 50, 'Lautstärke 64/127 = 50 %');
-$deliver('192.168.0.50', 40002, 0, $send('{"type":"mute_state","muted":true}'));
+$deliver('192.0.2.50', 40002, 0, $send('{"type":"mute_state","muted":true}'));
 check(World::value($dev, 'MUTED') === true, 'Stumm');
-$deliver('192.168.0.50', 40002, 0, $send('{"type":"button","clickType":"single","down":false,"heldMs":0}'));
+$deliver('192.0.2.50', 40002, 0, $send('{"type":"button","clickType":"single","down":false,"heldMs":0}'));
 check(str_starts_with((string)World::value($dev, 'BUTTON'), 'single'), 'Taste beim Loslassen');
-$deliver('192.168.0.50', 40002, 0, $send('{"type":"stats","tcpUpRetrans":1}') . $send('{"type":"unbekannt"}'));
+$deliver('192.0.2.50', 40002, 0, $send('{"type":"stats","tcpUpRetrans":1}') . $send('{"type":"unbekannt"}'));
 check(World::value($dev, 'ONLINE') === true && Kernel::$warnings === [], 'stats und unbekannte Nachrichten werden ignoriert');
-$deliver('192.168.0.50', 40002, 0, EmWebSocket::clientFrame(EmWebSocket::OP_PING, 'x'));
-$f = $take('192.168.0.50', 40002);
+$deliver('192.0.2.50', 40002, 0, EmWebSocket::clientFrame(EmWebSocket::OP_PING, 'x'));
+$f = $take('192.0.2.50', 40002);
 check(($f[0]['op'] ?? 0) === EmWebSocket::OP_PONG && ($f[0]['data'] ?? '') === 'x', 'Ping des Geräts wird mit Pong beantwortet');
 
 section('Steuern');
 RequestAction(World::varId($dev, 'VOLUME'), 100);
-$f = $take('192.168.0.50', 40002);
+$f = $take('192.0.2.50', 40002);
 check($json($f[0] ?? []) === ['type' => 'volume_set', 'level' => 127] && World::value($dev, 'VOLUME') === 100, 'Lautstärke 100 % = Level 127, nie darüber');
-check(EMGD_PlayCue($dev, 'wake') === '' && $json($take('192.168.0.50', 40002)[0] ?? [])['cue'] === 'wake', 'Signalton');
-check(EMGD_SendConfig($dev, '{"startupVolume":60}') === '' && ($json($take('192.168.0.50', 40002)[0] ?? [])['startupVolume'] ?? 0) === 60, 'Konfiguration als Teilupdate');
+check(EMGD_PlayCue($dev, 'wake') === '' && $json($take('192.0.2.50', 40002)[0] ?? [])['cue'] === 'wake', 'Signalton');
+check(EMGD_SendConfig($dev, '{"startupVolume":60}') === '' && ($json($take('192.0.2.50', 40002)[0] ?? [])['startupVolume'] ?? 0) === 60, 'Konfiguration als Teilupdate');
 check(EMGD_SendConfig($dev, 'kein json') === 'invalid JSON', 'ungültige Konfiguration abgewiesen');
 
 section('Ansage: Ton über /data in Perioden, gebremst');
 check(EMGD_Beep($dev, 1) === 'device has no audio connection', 'ohne /data-Verbindung keine Wiedergabe');
-$deliver('192.168.0.50', 40003, 1);
-$deliver('192.168.0.50', 40003, 0, $request('/data'));
-$take('192.168.0.50', 40003);
+$deliver('192.0.2.50', 40003, 1);
+$deliver('192.0.2.50', 40003, 0, $request('/data'));
+$take('192.0.2.50', 40003);
 check(EMGD_Beep($dev, 1) === '', '1 s Testton angenommen');
-$f = $take('192.168.0.50', 40003);
+$f = $take('192.0.2.50', 40003);
 $frames = array_filter($f, static fn(array $x): bool => ($x['op'] ?? 0) === EmWebSocket::OP_BINARY);
 $speaker = count(array_filter($frames, static fn(array $x): bool => $x['data'][0] === "\x02"));
 $eos = count(array_filter($frames, static fn(array $x): bool => $x['data'] === "\x03"));
@@ -221,15 +221,15 @@ Kernel::advance(1);
 check(Kernel::$instances[$gw]['timers']['Pump']['interval'] === 0, 'Pump-Timer steht, wenn alles gesendet ist');
 
 check(EMGD_Beep($dev, 5) === '', '5 s Testton angenommen');
-$f = $take('192.168.0.50', 40003);
+$f = $take('192.0.2.50', 40003);
 $first = count(array_filter($f, static fn(array $x): bool => ($x['data'][0] ?? '') === "\x02"));
 check($first === 71 && count(array_filter($f, static fn(array $x): bool => ($x['data'] ?? '') === "\x03")) === 0, 'nur 3 s vorausgeschickt (71 Perioden), noch kein Ende: ' . $first);
 Kernel::advance(1);
-$f = $take('192.168.0.50', 40003);
+$f = $take('192.0.2.50', 40003);
 $second = count(array_filter($f, static fn(array $x): bool => ($x['data'][0] ?? '') === "\x02"));
 check($second >= 22 && $second <= 24 && count(array_filter($f, static fn(array $x): bool => ($x['data'] ?? '') === "\x03")) === 0, 'nach 1 s füllt der Timer um 1 s nach (' . $second . ' Perioden), noch kein Ende');
 Kernel::advance(4);
-$f = $take('192.168.0.50', 40003);
+$f = $take('192.0.2.50', 40003);
 $rest = count(array_filter($f, static fn(array $x): bool => ($x['data'][0] ?? '') === "\x02"));
 check($first + $second + $rest === 118 && count(array_filter($f, static fn(array $x): bool => ($x['data'] ?? '') === "\x03")) === 1, 'insgesamt 118 Perioden (5 s, 117,2 aufgerundet), danach das Ende');
 
@@ -239,7 +239,7 @@ $dir = IPS_GetKernelDir() . 'media/';
 $wav = EmPcm::wrapWav(EmPcm::pack(array_fill(0, 2400, 800)), 24000);
 file_put_contents($dir . 'em_test.wav', $wav);
 check(EMGD_SpeakFile($dev, $dir . 'em_test.wav') === '', 'SpeakFile angenommen');
-$f = $take('192.168.0.50', 40003);
+$f = $take('192.0.2.50', 40003);
 check(count(array_filter($f, static fn(array $x): bool => ($x['data'][0] ?? '') === "\x02")) === 3, '0,1 s bei 24 kHz = 3 Perioden bei 48 kHz');
 check(EMGD_SpeakFile($dev, '/etc/passwd') === 'audio file not found' && EMGD_SpeakFile($dev, $dir . '../x') === 'audio file not found', 'Dateien außerhalb des Medienordners werden abgewiesen');
 file_put_contents($dir . 'em_bad.wav', 'kein wav');
@@ -248,28 +248,28 @@ check(EMGD_SpeakFile($dev, $dir . 'em_bad.wav') === 'not a WAV file', 'kaputte D
 @unlink($dir . 'em_bad.wav');
 
 section('Verbindungen enden, Fehler im Protokoll');
-$deliver('192.168.0.50', 40002, 2);
+$deliver('192.0.2.50', 40002, 2);
 check(World::value($dev, 'ONLINE') === false, 'Verbindung weg: Gerät offline');
 check(EMGD_Beep($dev, 1) === 'device has no audio connection', 'und keine Wiedergabe mehr');
-$deliver('192.168.0.51', 41000, 1);
-$deliver('192.168.0.51', 41000, 0, "POST / HTTP/1.1\r\n\r\n");
-$f = $take('192.168.0.51', 41000);
+$deliver('192.0.2.51', 41000, 1);
+$deliver('192.0.2.51', 41000, 0, "POST / HTTP/1.1\r\n\r\n");
+$f = $take('192.0.2.51', 41000);
 check(str_contains($f[0]['http'] ?? '', '400'), 'Fremde HTTP-Anfrage: 400');
-$deliver('192.168.0.52', 41001, 1);
-$deliver('192.168.0.52', 41001, 0, $request('/shell/abc'));
-$f = $take('192.168.0.52', 41001);
+$deliver('192.0.2.52', 41001, 1);
+$deliver('192.0.2.52', 41001, 0, $request('/shell/abc'));
+$f = $take('192.0.2.52', 41001);
 check(str_contains($f[0]['http'] ?? '', '400'), 'unbekannter Pfad (/shell) wird abgewiesen');
-$deliver('192.168.0.53', 41002, 1);
-$deliver('192.168.0.53', 41002, 0, $request('/control'));
-$take('192.168.0.53', 41002);
-$deliver('192.168.0.53', 41002, 0, EmWebSocket::text('x'));
-$f = $take('192.168.0.53', 41002);
+$deliver('192.0.2.53', 41002, 1);
+$deliver('192.0.2.53', 41002, 0, $request('/control'));
+$take('192.0.2.53', 41002);
+$deliver('192.0.2.53', 41002, 0, EmWebSocket::text('x'));
+$f = $take('192.0.2.53', 41002);
 check(!empty(array_filter($f, static fn(array $x): bool => ($x['op'] ?? 0) === EmWebSocket::OP_CLOSE)), 'unmaskierter Rahmen: Close-Rahmen');
-$deliver('192.168.0.54', 41003, 1);
-$deliver('192.168.0.54', 41003, 0, $request('/control'));
-$take('192.168.0.54', 41003);
+$deliver('192.0.2.54', 41003, 1);
+$deliver('192.0.2.54', 41003, 0, $request('/control'));
+$take('192.0.2.54', 41003);
 Kernel::advance(90);
-$f = $take('192.168.0.54', 41003);
+$f = $take('192.0.2.54', 41003);
 check(count(array_filter($f, static fn(array $x): bool => ($x['op'] ?? 0) === EmWebSocket::OP_PING)) >= 2 && !empty(array_filter($f, static fn(array $x): bool => ($x['op'] ?? 0) === EmWebSocket::OP_CLOSE)),
     'stille Verbindung wird alle 20 s gepingt und nach über 60 s geschlossen');
 
@@ -304,24 +304,24 @@ IPS_ApplyChanges($gw);
 check(IPS_GetInstance($voice)['InstanceStatus'] === IS_ACTIVE, 'Voice aktiv (Gateway, Adresse und Token gesetzt)');
 
 // Der Dot meldet sich neu an: jetzt mit Sprachrunde
-$deliver('192.168.0.50', 40010, 1);
-$deliver('192.168.0.50', 40010, 0, $request('/control'));
-$take('192.168.0.50', 40010);
-$deliver('192.168.0.50', 40010, 0, $send($register('G090LF0123456789')));
-$f = $take('192.168.0.50', 40010);
+$deliver('192.0.2.50', 40010, 1);
+$deliver('192.0.2.50', 40010, 0, $request('/control'));
+$take('192.0.2.50', 40010);
+$deliver('192.0.2.50', 40010, 0, $send($register('G090LF0123456789')));
+$f = $take('192.0.2.50', 40010);
 $ack = $json($f[0] ?? []);
 $cfg = $json($f[1] ?? []);
 check(in_array('listen_session', $ack['features'] ?? [], true) && in_array('output_chain', $ack['features'], true), 'ack nennt listen_session, sobald Voice verbunden ist');
 check(($cfg['type'] ?? '') === 'config' && ($cfg['owwOnDevice'] ?? '') === 'on' && ($cfg['wakeSound'] ?? null) === true, 'Konfiguration: Wakeword auf dem Dot, Signalton an');
-$deliver('192.168.0.50', 40011, 1);
-$deliver('192.168.0.50', 40011, 0, $request('/data'));
-$take('192.168.0.50', 40011);
+$deliver('192.0.2.50', 40011, 1);
+$deliver('192.0.2.50', 40011, 0, $request('/data'));
+$take('192.0.2.50', 40011);
 Kernel::deliverUpdates();
 
 // Wakeword
-$deliver('192.168.0.50', 40010, 0, $send('{"type":"oww_wake","score":0.93,"threshold":0.5,"ageMs":120,"session":7,"floor":10,"barge":false}'));
+$deliver('192.0.2.50', 40010, 0, $send('{"type":"oww_wake","score":0.93,"threshold":0.5,"ageMs":120,"session":7,"floor":10,"barge":false}'));
 Kernel::deliverUpdates();
-$f = $take('192.168.0.50', 40010);
+$f = $take('192.0.2.50', 40010);
 check(($json($f[0] ?? []))['type'] === 'listen_ack' && $json($f[0])['session'] === 7, 'oww_wake → listen_ack mit der Sitzungsnummer');
 $open = array_values(array_filter($GLOBALS['symdo'], static fn(array $c): bool => $c['body']['action'] === 'open'));
 check(count($open) === 1 && $open[0]['url'] === 'http://127.0.0.1:3777/hook/lists/app/v1/voice' && $open[0]['auth'] === 'Authorization: Bearer sdtok' && $open[0]['body']['userId'] === 'u-stephan', 'Voice öffnet die SymDo-Sitzung (Adresse, Bearer, Nutzer)');
@@ -333,11 +333,11 @@ check(World::value($voice, 'STATE') === 'verbinde' || World::value($voice, 'STAT
 // Mikrofon, solange noch verbunden wird: wird zwischengespeichert
 $mic = static fn(int $session, int $seq, string $pcm): string => EmWebSocket::clientFrame(EmWebSocket::OP_BINARY, "\x07" . pack('Nn', $session, $seq) . $pcm);
 $pcm16 = EmPcm::pack(array_fill(0, 1600, 500)); // 100 ms bei 16 kHz
-$deliver('192.168.0.50', 40011, 0, $mic(7, 0, $pcm16));
+$deliver('192.0.2.50', 40011, 0, $mic(7, 0, $pcm16));
 Kernel::deliverUpdates();
 check(empty(array_filter($GLOBALS['clientSent'], static fn(string $t): bool => str_contains($t, "\x81") && strlen($t) > 100 && !str_starts_with($t, 'GET '))), 'vor der Verbindung wird nichts gesendet');
 check(is_file(EmSpool::path('mic_G090LF0123456789')) && filesize(EmSpool::path('mic_G090LF0123456789')) === 3200, 'Mikrofon liegt in der Spool-Datei (3200 Byte)');
-$deliver('192.168.0.50', 40011, 0, $mic(6, 0, $pcm16)); // alte Sitzung
+$deliver('192.0.2.50', 40011, 0, $mic(6, 0, $pcm16)); // alte Sitzung
 Kernel::deliverUpdates();
 check(filesize(EmSpool::path('mic_G090LF0123456789')) === 3200, 'Rahmen einer anderen Sitzung werden verworfen');
 
@@ -368,15 +368,15 @@ $appends = array_values(array_filter($frames, static fn($m): bool => ($m['type']
 check(count($appends) >= 1 && strlen(base64_decode($appends[0]['audio'])) === 4800, 'nach dem Upgrade geht das gespeicherte Mikrofon als 24-kHz-Audio hinaus (100 ms = 4800 Byte)');
 check(World::value($voice, 'STATE') === 'hört zu' || World::value($voice, 'STATE') === 'listening', 'Zustand: hört zu');
 $GLOBALS['clientSent'] = [];
-$deliver('192.168.0.50', 40011, 0, $mic(7, 1, $pcm16));
+$deliver('192.0.2.50', 40011, 0, $mic(7, 1, $pcm16));
 Kernel::deliverUpdates();
 $appends = array_values(array_filter($sentFrames(), static fn($m): bool => ($m['type'] ?? '') === 'input_audio_buffer.append'));
 check(count($appends) === 1 && strlen(base64_decode($appends[0]['audio'])) === 4800, 'weiteres Mikrofon geht sofort weiter');
 
 // Ende der Sprache → Dot hört auf
-$take('192.168.0.50', 40010);
+$take('192.0.2.50', 40010);
 $server('{"type":"input_audio_buffer.speech_stopped"}');
-$f = $take('192.168.0.50', 40010);
+$f = $take('192.0.2.50', 40010);
 check(($json($f[0] ?? []))['type'] === 'listen_close' && $json($f[0])['session'] === 7 && $json($f[0])['reason'] === 'end_of_speech', 'speech_stopped → listen_close, der Dot hört danach nur noch lokal');
 $server('{"type":"conversation.item.input_audio_transcription.completed","transcript":"Milch auf die Einkaufsliste."}');
 check(World::value($voice, 'LAST_TEXT') === 'Milch auf die Einkaufsliste.', 'Mitschrift erscheint im Voice-Modul');
@@ -392,21 +392,21 @@ $server('{"type":"response.done","response":{"status":"completed","output":[{"ty
 check(World::value($voice, 'STATE') !== 'bereit' && count(array_filter($GLOBALS['symdo'], static fn(array $c): bool => $c['body']['action'] === 'tool')) === 1 && count(array_filter($GLOBALS['symdo'], static fn(array $c): bool => $c['body']['action'] === 'close')) === 0, 'response.done mit Werkzeug beendet die Sitzung nicht und führt nichts doppelt aus');
 
 // Antwort
-$take('192.168.0.50', 40011);
+$take('192.0.2.50', 40011);
 $delta = base64_encode(EmPcm::pack(array_fill(0, 2400, 1000))); // 100 ms bei 24 kHz
 $server(json_encode(['type' => 'response.output_audio.delta', 'delta' => $delta]));
-$f = $take('192.168.0.50', 40011);
+$f = $take('192.0.2.50', 40011);
 $sp = array_filter($f, static fn(array $x): bool => ($x['data'][0] ?? '') === "\x02");
 check(count($sp) === 3 && count(array_filter($f, static fn(array $x): bool => ($x['data'] ?? '') === "\x03")) === 0, '100 ms Antwort = 3 Perioden, noch kein Ende (die Antwort läuft)');
 $server(json_encode(['type' => 'response.audio.delta', 'delta' => $delta]));
-$f = $take('192.168.0.50', 40011);
+$f = $take('192.0.2.50', 40011);
 check(count(array_filter($f, static fn(array $x): bool => ($x['data'][0] ?? '') === "\x02")) >= 2, 'weitere Stücke (Beta-Ereignisname) werden angehängt');
 Kernel::advance(2);
 check(Kernel::$instances[$gw]['timers']['Pump']['interval'] === 250, 'der Pump-Timer bleibt, solange der Strom offen ist');
 $GLOBALS['clientSent'] = [];
 $server('{"type":"response.done","response":{"status":"completed","output":[{"type":"message"}]}}');
 Kernel::advance(2);
-$f = $take('192.168.0.50', 40011);
+$f = $take('192.0.2.50', 40011);
 check(count(array_filter($f, static fn(array $x): bool => ($x['data'] ?? '') === "\x03")) === 1, 'Ende der Antwort → Ende-Rahmen 0x03 an den Dot');
 check(count(array_filter($GLOBALS['symdo'], static fn(array $c): bool => $c['body']['action'] === 'close')) === 1, 'SymDo-Sitzung geschlossen (zählt die Sprechzeit)');
 $closeFrame = array_filter($GLOBALS['clientSent'], static fn(string $t): bool => (EmWebSocket::decode($t)['messages'][0]['op'] ?? 0) === EmWebSocket::OP_CLOSE);
@@ -415,20 +415,20 @@ check(Kernel::$instances[$gw]['buffers']['Voice'] === '[]' || json_decode(Kernel
 
 // Zweiter Dot, solange der erste spricht: abgewiesen
 $GLOBALS['symdo'] = [];
-$deliver('192.168.0.50', 40010, 0, $send('{"type":"oww_wake","session":8,"barge":false}'));
+$deliver('192.0.2.50', 40010, 0, $send('{"type":"oww_wake","session":8,"barge":false}'));
 Kernel::deliverUpdates();
-$take('192.168.0.50', 40010);
+$take('192.0.2.50', 40010);
 $GLOBALS['clientSent'] = [];
 EchoMuseTestSecondDot($gw, $deliver, $request, $send, $register, $take, $json);
 
 section('AutoApprove');
 $gw2cfg = IPS_SetProperty($gw, 'AutoApprove', true);
 IPS_ApplyChanges($gw);
-$deliver('192.168.0.60', 42000, 1);
-$deliver('192.168.0.60', 42000, 0, $request('/control'));
-$take('192.168.0.60', 42000);
-$deliver('192.168.0.60', 42000, 0, $send($register('NEUGERAET1')));
-$f = $take('192.168.0.60', 42000);
+$deliver('192.0.2.60', 42000, 1);
+$deliver('192.0.2.60', 42000, 0, $request('/control'));
+$take('192.0.2.60', 42000);
+$deliver('192.0.2.60', 42000, 0, $send($register('NEUGERAET1')));
+$f = $take('192.0.2.60', 42000);
 check(($json($f[0] ?? [])['type'] ?? '') === 'ack', 'mit AutoApprove wird ein neues Gerät sofort angenommen');
 
 check(Kernel::$warnings === [], 'keine PHP-Warnungen' . (Kernel::$warnings === [] ? '' : ': ' . implode(' | ', Kernel::$warnings)));

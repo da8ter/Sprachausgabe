@@ -234,7 +234,7 @@ $hub2 = Kernel::createInstance(HUB);
 IPS_SetProperty($hub2, 'Outputs', json_encode([['name' => 'Sonos', 'type' => 'ai_script', 'instance' => 0, 'script' => 50002, 'volume' => 30, 'default' => true]]));
 IPS_SetProperty($hub2, 'AiProvider', 'openai');
 IPS_SetProperty($hub2, 'AiOpenAIKey', 'sk-test');
-IPS_SetProperty($hub2, 'AiBaseUrl', 'http://192.168.0.6:3777/');
+IPS_SetProperty($hub2, 'AiBaseUrl', 'http://192.0.2.6:3777/');
 IPS_SetProperty($hub2, 'Cooldown', 0);
 IPS_ApplyChanges($hub2);
 check(isset(Kernel::$instances[$hub2]['hooks']['sprachausgabe']), 'Webhook /hook/sprachausgabe registriert');
@@ -245,7 +245,7 @@ Kernel::advance(1);
 $call = $GLOBALS['calls'][0] ?? [];
 check(($call[0] ?? '') === 'script' && count($GLOBALS['http']) === 1, 'eine Aufnahme erzeugt, Skript aufgerufen');
 $params = $GLOBALS['lastScriptParams'] ?? [];
-check(preg_match('#^http://192\.168\.0\.6:3777/hook/sprachausgabe/[a-f0-9]{64}\.mp3$#', (string)($params['AUDIO_URL'] ?? '')) === 1 && is_file((string)($params['AUDIO_FILE'] ?? '')),
+check(preg_match('#^http://192\.0\.2\.6:3777/hook/sprachausgabe/[a-f0-9]{64}\.mp3$#', (string)($params['AUDIO_URL'] ?? '')) === 1 && is_file((string)($params['AUDIO_FILE'] ?? '')),
     'Skript bekommt AUDIO_URL und AUDIO_FILE: ' . ($params['AUDIO_URL'] ?? ''));
 SPAZ_Speak($hub2, 'Die Waschmaschine ist fertig.', '', 0);
 Kernel::advance(5);

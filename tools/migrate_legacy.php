@@ -18,10 +18,16 @@ declare(strict_types=1);
  * werden auf die eigene Kategorie umgehängt oder gestrichen und im Bericht genannt.
  */
 
-const CATEGORY = 32940;
+// ID der Kategorie mit den alten Sprachausgaben — vor dem Lauf eintragen.
+const CATEGORY = 0;
 const DRY_RUN = true;
 const HUB_GUID = '{8DF4B1D9-E589-452D-BE37-8EC5DEF4CF13}';
 const ANN_GUID = '{94CE47EF-0417-49FB-9DE9-6B292F709A06}';
+
+if (CATEGORY <= 0 || !IPS_CategoryExists(CATEGORY)) {
+    IPS_LogMessage('SPA-Migration', 'Bitte oben CATEGORY auf die Kategorie der alten Sprachausgaben setzen.');
+    return;
+}
 
 $report = ['dry' => DRY_RUN, 'notes' => [], 'announcements' => []];
 $note = static function (string $text) use (&$report): void { $report['notes'][] = $text; };

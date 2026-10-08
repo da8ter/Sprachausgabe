@@ -27,7 +27,7 @@ function section(string $t): void { echo "== $t\n"; }
 
 section('WebSocket-Handshake');
 check(EmWebSocket::acceptKey('dGhlIHNhbXBsZSBub25jZQ==') === 's3pPLMBiTxaQ9kYGzzhZRbK+xOo=', 'Accept-Schlüssel gegen das Beispiel aus RFC 6455');
-$req = "GET /control HTTP/1.1\r\nHost: 192.168.0.6:8767\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nX-EM-Token: abc\r\n\r\n";
+$req = "GET /control HTTP/1.1\r\nHost: 192.0.2.6:8767\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nX-EM-Token: abc\r\n\r\n";
 $p = EmWebSocket::parseRequest($req . "\x81");
 check($p !== null && $p['path'] === '/control' && $p['headers']['x-em-token'] === 'abc' && $p['rest'] === "\x81" && EmWebSocket::isUpgrade($p['headers']), 'Pfad, Header, Rest hinter dem Kopf, Upgrade erkannt');
 check(EmWebSocket::parseRequest(substr($req, 0, 40)) === null, 'unvollständiger Kopf: noch nichts');
@@ -68,8 +68,8 @@ try { EmWebSocket::decode("\x82\xFF" . pack('J', 5000000) . "\0\0\0\0"); } catch
 check($threw, 'übergroßer Rahmen wird abgewiesen, bevor Speicher belegt wird');
 
 section('Protokoll');
-$reg = EmProtocol::parseRegister(['type' => 'register', 'device_id' => 'G090LF0123456789', 'version' => 'v2.30.1', 'capabilities' => ['mic', 'speaker', 'bad cap!', 'leds'], 'ip' => '192.168.0.50', 'base_os' => 'emos', 'board' => 'biscuit']);
-check($reg !== null && $reg['id'] === 'G090LF0123456789' && $reg['caps'] === ['mic', 'speaker', 'leds'] && $reg['ip'] === '192.168.0.50', 'register: Fähigkeiten gefiltert, Gerätekennung übernommen');
+$reg = EmProtocol::parseRegister(['type' => 'register', 'device_id' => 'G090LF0123456789', 'version' => 'v2.30.1', 'capabilities' => ['mic', 'speaker', 'bad cap!', 'leds'], 'ip' => '192.0.2.50', 'base_os' => 'emos', 'board' => 'biscuit']);
+check($reg !== null && $reg['id'] === 'G090LF0123456789' && $reg['caps'] === ['mic', 'speaker', 'leds'] && $reg['ip'] === '192.0.2.50', 'register: Fähigkeiten gefiltert, Gerätekennung übernommen');
 check(EmProtocol::parseRegister(['type' => 'register', 'device_id' => '../../etc']) === null && EmProtocol::parseRegister(['type' => 'stats']) === null, 'register: Pfad als Kennung und fremde Nachricht abgewiesen');
 $ack = json_decode(EmProtocol::ack('X1', 1790000000000), true);
 check($ack === ['type' => 'ack', 'device_id' => 'X1', 'features' => ['output_chain'], 'time_ms' => 1790000000000], 'ack mit Fähigkeiten und Uhrzeit');
