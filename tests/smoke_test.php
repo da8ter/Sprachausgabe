@@ -25,6 +25,19 @@ function ECHOREMOTE_Announcement(int $id, string $tts): bool { $GLOBALS['calls']
 function FKB_textToSpeech(int $id, string $tts): bool { $GLOBALS['calls'][] = ['fully', $id, $tts, 0]; return true; }
 function IPS_ScriptExists(int $id): bool { return isset($GLOBALS['scripts'][$id]); }
 function IPS_RunScriptEx(int $id, array $params): bool { $GLOBALS['lastScriptParams'] = $params; $GLOBALS['calls'][] = ['script', $id, $params['TEXT'], (int)$params['VOLUME'], $params['TARGET']]; return true; }
+// events (time triggers of the announcement list): only what the module calls
+$GLOBALS['events'] = [];
+foreach (['EVENTTYPE_TRIGGER' => 0, 'EVENTTYPE_CYCLIC' => 1, 'EVENTTYPE_SCHEDULE' => 2] as $c => $v) {
+    defined($c) || define($c, $v);
+}
+function IPS_CreateEvent(int $type): int { $id = Kernel::createObject(OBJECTTYPE_EVENT); $GLOBALS['events'][$id] = ['type' => $type, 'script' => '', 'active' => false, 'time' => null]; return $id; }
+function IPS_EventExists(int $id): bool { return isset($GLOBALS['events'][$id]) && Kernel::objectExists($id); }
+function IPS_DeleteEvent(int $id): bool { Kernel::deleteObject($id); unset($GLOBALS['events'][$id]); return true; }
+function IPS_SetEventCyclic(int $id, int $dt, int $dv, int $dd, int $ddv, int $tt, int $tv): bool { return true; }
+function IPS_SetEventCyclicTimeFrom(int $id, int $h, int $m, int $s): bool { $GLOBALS['events'][$id]['time'] = [$h, $m, $s]; return true; }
+function IPS_SetEventScript(int $id, string $code): bool { $GLOBALS['events'][$id]['script'] = $code; return true; }
+function IPS_SetEventActive(int $id, bool $active): bool { $GLOBALS['events'][$id]['active'] = $active; return true; }
+function IPS_SetHidden(int $id, bool $hidden): bool { return true; }
 function IPS_GetOption(string $o): mixed { return $o === 'ScriptOutputBufferLimit' ? 1048576 : 0; }
 function IPS_IsConditionPassing(string $c): bool { return $GLOBALS['conditions'][$c] ?? true; }
 function GetValueFormatted(int $id): string
@@ -336,6 +349,95 @@ check($out === "• A 99,0\n• B Füllstand", 'Ansage-Vorschau zeigt jede Varia
 ob_start();
 SPAA_Preview($b, '', '');
 check(str_contains((string)ob_get_clean(), 'Kein Text'), 'Vorschau ohne Text nennt das');
+
+section('Ansagen als Liste in der Zentrale');
+$hl = Kernel::createInstance(HUB);
+IPS_SetProperty($hl, 'Outputs', json_encode([
+    ['name' => 'Küche', 'type' => 'echo_speak', 'instance' => $echo, 'script' => 0, 'volume' => 40, 'default' => true],
+    ['name' => 'Tablet', 'type' => 'fully', 'instance' => $fully, 'script' => 0, 'volume' => 0, 'default' => false],
+]));
+IPS_SetProperty($hl, 'Cooldown', 0);
+$wash = IPS_CreateVariable(VARIABLETYPE_STRING);
+IPS_SetName($wash, 'Waschmaschine');
+$tub = IPS_CreateVariable(VARIABLETYPE_FLOAT);
+SetValue($tub, 10.0);
+$tabletKey = 'T_' . substr(md5('tablet'), 0, 6);
+IPS_SetProperty($hl, 'Announcements', json_encode([
+    ['active' => true, 'name' => 'Wäsche', 'TriggerCondition' => SpeechTrigger::ruleJson($wash, 0, 'Finished'), 'TriggerMode' => 0,
+        'TimeEnabled' => false, 'Time' => '', 'Texts' => 'Die {name} ist fertig', 'Condition' => '', 'Volume' => 0, 'Urgent' => false],
+    ['active' => true, 'name' => 'Wanne', 'TriggerCondition' => SpeechTrigger::ruleJson($tub, 2, 80), 'TriggerMode' => 0,
+        'TimeEnabled' => true, 'Time' => '{"hour":6,"minute":30,"second":0}', 'Texts' => 'Wanne voll: {value}', 'Condition' => '', 'Volume' => 0, 'Urgent' => false, $tabletKey => true],
+]));
+IPS_ApplyChanges($hl);
+Kernel::advance(1);
+$annRows = json_decode(IPS_GetProperty($hl, 'Announcements'), true);
+check(count(array_filter(array_column($annRows, 'annId'))) === 2, 'jede Ansage bekommt beim Übernehmen eine feste Kennung');
+$GLOBALS['calls'] = [];
+$fire($wash, 'Finished');
+Kernel::advance(1);
+check($taken() === [['echo', $echo, 'Die Waschmaschine ist fertig', 40]], 'Waschmaschine fertig: Ansage aus der Liste auf dem Standardgerät');
+$fire($tub, 90.0);
+Kernel::advance(1);
+check($taken() === [['fully', $fully, 'Wanne voll: 90,0', 0]], 'Grenzwert überschritten: nur auf dem angehakten Tablet');
+$ev = @IPS_GetObjectIDByIdent('ANNTIME_' . $annRows[1]['annId'], $hl);
+check(is_int($ev) && $ev > 0 && $GLOBALS['events'][$ev]['time'] === [6, 30, 0] && $GLOBALS['events'][$ev]['active'] === true
+    && str_contains($GLOBALS['events'][$ev]['script'], "SPAZ_TriggerAnnouncement($hl, '" . $annRows[1]['annId'] . "')"), 'täglicher Zeitauslöser als Ereignis unter der Zentrale (06:30, ruft die Ansage per Kennung)');
+check(SPAZ_TriggerAnnouncement($hl, 'Wanne') === '' && SPAZ_TriggerAnnouncement($hl, 'gibtsnicht') === 'unknown announcement', 'SPAZ_TriggerAnnouncement nach Name');
+Kernel::advance(2);
+$taken();
+$annRows[0]['active'] = false;
+$annRows[1]['TimeEnabled'] = false;
+IPS_SetProperty($hl, 'Announcements', json_encode($annRows));
+IPS_ApplyChanges($hl);
+$fire($wash, 'Run');
+$fire($wash, 'Finished');
+Kernel::advance(1);
+check($taken() === [] && !is_int(@IPS_GetObjectIDByIdent('ANNTIME_' . $annRows[1]['annId'], $hl)), 'deaktivierte Ansage schweigt, abgeschalteter Zeitauslöser wird gelöscht');
+ob_start();
+SPAZ_PreviewAnnouncement($hl, "A {name}\nB {value}", SpeechTrigger::ruleJson($wash, 0, 'x'));
+$out = (string)ob_get_clean();
+check($out === "• A Waschmaschine\n• B Finished", 'Vorschau im Dialog: ' . str_replace("\n", ' | ', $out));
+ob_start();
+SPAZ_TestAnnouncement($hl, 'Probe', '', json_encode(['Küche' => false, 'Tablet' => true]), 0);
+$out = (string)ob_get_clean();
+Kernel::advance(1);
+check(str_contains($out, 'Gesendet') && $taken() === [['fully', $fully, 'Probe', 0]], 'Test im Dialog spricht auf den angehakten Geräten');
+check(is_array(json_decode(Kernel::$instances[$hl]['object']->GetConfigurationForm(), true)), 'Formular mit Ansageliste ist gültiges JSON');
+
+section('Ansage-Instanzen in die Liste übernehmen');
+$hi = Kernel::createInstance(HUB);
+IPS_SetProperty($hi, 'Outputs', json_encode([['name' => 'Küche', 'type' => 'echo_speak', 'instance' => $echo, 'script' => 0, 'volume' => 40, 'default' => true],
+    ['name' => 'Flur', 'type' => 'echo_announce', 'instance' => $echo, 'script' => 0, 'volume' => 0, 'default' => false]]));
+IPS_SetProperty($hi, 'Cooldown', 0);
+IPS_ApplyChanges($hi);
+$old = Kernel::createInstance(ANN);
+IPS_DisconnectInstance($old);
+IPS_ConnectInstance($old, $hi);
+IPS_SetName($old, 'Rauchmelder');
+$smoke = IPS_CreateVariable(VARIABLETYPE_BOOLEAN);
+IPS_SetProperty($old, 'TriggerVariable', $smoke); // old format: converted by the import
+IPS_SetProperty($old, 'TriggerRule', SpeechTrigger::EQUALS);
+IPS_SetProperty($old, 'TriggerValue', 'true');
+IPS_SetProperty($old, 'Texts', 'Feuer!');
+IPS_SetProperty($old, 'Urgent', true);
+IPS_SetProperty($old, 'Targets', json_encode([['name' => 'Flur', 'use' => true]]));
+IPS_ApplyChanges($old);
+Kernel::advance(1);
+RequestAction(World::varId($old, 'ACTIVE'), false);
+$report = SPAZ_ImportAnnouncements($hi);
+Kernel::advance(1);
+$imp = json_decode(IPS_GetProperty($hi, 'Announcements'), true);
+check(!IPS_InstanceExists($old) && count($imp) === 1 && $imp[0]['name'] === 'Rauchmelder' && $imp[0]['Urgent'] === true && $imp[0]['active'] === false
+    && ($imp[0]['T_' . substr(md5('flur'), 0, 6)] ?? false) === true && SpeechTrigger::rule($imp[0]['TriggerCondition'])['variableID'] === $smoke,
+    'Instanz übernommen (Name, Dringend, Aktiv, Ziel, Auslöser) und gelöscht: ' . str_replace("\n", ' | ', $report));
+$imp[0]['active'] = true;
+IPS_SetProperty($hi, 'Announcements', json_encode($imp));
+IPS_ApplyChanges($hi);
+Kernel::advance(1);
+$GLOBALS['calls'] = [];
+$fire($smoke, true);
+Kernel::advance(1);
+check($taken() === [['announce', $echo, 'Feuer!', 0]], 'übernommene Ansage spricht auf ihrem Ziel');
 
 section('KI-Stimme: alle fünf Anbieter (Netz als Attrappe)');
 $GLOBALS['http'] = [];

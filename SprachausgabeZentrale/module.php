@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../libs/SpeechOutputs.php';
 require_once __DIR__ . '/../libs/SpeechAiStore.php';
+require_once __DIR__ . '/../libs/SpeechAnnouncements.php';
 
 /**
  * Sprachausgabe Zentrale: kennt die Ausgabegeräte, die globalen Schalter (Hauptschalter,
- * Ruhemodus, Lautstärke) und die Warteschlange. Ansagen kommen von den Kind-Instanzen
- * (ForwardData) oder aus Skripten (SPAZ_Speak). Gesprochen wird über einen Timer, nicht im
+ * Ruhemodus, Lautstärke), die Ansagen (Liste, Trait SpeechAnnouncements) und die Warteschlange.
+ * Ansagen kommen aus der eigenen Liste, aus Skripten (SPAZ_Speak) oder von alten
+ * Ansage-Instanzen (ForwardData, bis sie per SPAZ_ImportAnnouncements übernommen sind). Gesprochen wird über einen Timer, nicht im
  * Thread des Auslösers: Echo-Aufrufe gehen in die Cloud und dürfen den Auslöser nicht aufhalten.
  */
 class SprachausgabeZentrale extends IPSModuleStrict
 {
     use SpeechAiStore;
+    use SpeechAnnouncements;
 
     private const DATA_TX = '{4942173C-5F03-4B89-835D-D3698A337C2D}';
     private const QUEUE_MAX = 20;
@@ -29,6 +32,7 @@ class SprachausgabeZentrale extends IPSModuleStrict
         $this->RegisterAttributeBoolean('Initialized', false);
         $this->RegisterTimer('Process', 0, 'SPAZ_ProcessQueue($_IPS[\'TARGET\']);');
         $this->aiRegister();
+        $this->annRegister();
 
         $this->RegisterVariableBoolean('MASTER', $this->Translate('Announcements'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_SWITCH,
@@ -73,7 +77,10 @@ class SprachausgabeZentrale extends IPSModuleStrict
             $this->RegisterMessage(0, IPS_KERNELSTARTED);
             return;
         }
-        $this->SetSummary(sprintf($this->Translate('%d outputs'), count($this->outputs())));
+        if ($this->annApply()) {
+            return; // applied again by the timer, with the ids of new announcements
+        }
+        $this->SetSummary(sprintf($this->Translate('%d outputs, %d announcements'), count($this->outputs()), count($this->annRows())));
         $this->SetStatus(IS_ACTIVE);
     }
 
@@ -81,6 +88,10 @@ class SprachausgabeZentrale extends IPSModuleStrict
     {
         if ($Message === IPS_KERNELSTARTED) {
             $this->ApplyChanges();
+            return;
+        }
+        if ($Message === VM_UPDATE) {
+            $this->annMessage($SenderID, $Data);
         }
     }
 
@@ -178,8 +189,19 @@ class SprachausgabeZentrale extends IPSModuleStrict
             $typeOptions[] = ['caption' => $this->Translate('type:' . $type), 'value' => $type];
         }
         $names = array_column($this->outputs(), 'name');
+        $legacy = 0;
+        foreach (IPS_GetInstanceListByModuleID(self::ANN_GUID) as $inst) {
+            $legacy += IPS_GetInstance($inst)['ConnectionID'] === $this->InstanceID ? 1 : 0;
+        }
         return (string)json_encode([
             'elements' => [
+                $this->annFormList(),
+                ['type' => 'RowLayout', 'visible' => $legacy > 0, 'items' => [
+                    ['type' => 'Label', 'caption' => sprintf($this->Translate('%d announcement instances are still connected to this hub.'), $legacy)],
+                    ['type' => 'Button', 'caption' => 'Import them into the list', 'onClick' => 'echo SPAZ_ImportAnnouncements($id);',
+                        'confirm' => 'The announcement instances are deleted after the import. Continue?'],
+                ]],
+                ['type' => 'ExpansionPanel', 'caption' => 'Outputs', 'items' => [
                 ['type' => 'List', 'name' => 'Outputs', 'caption' => 'Outputs', 'add' => true, 'delete' => true, 'rowCount' => 6,
                     'columns' => [
                         ['caption' => 'Name / room', 'name' => 'name', 'width' => '180px', 'add' => '', 'edit' => ['type' => 'ValidationTextBox']],
@@ -191,6 +213,7 @@ class SprachausgabeZentrale extends IPSModuleStrict
                         ['caption' => 'Default', 'name' => 'default', 'width' => '80px', 'add' => true, 'edit' => ['type' => 'CheckBox']],
                     ]],
                 ['type' => 'Label', 'caption' => 'Script outputs receive $_IPS[\'TEXT\'], $_IPS[\'VOLUME\'] and $_IPS[\'TARGET\']; "AI voice" outputs also $_IPS[\'AUDIO_URL\'] and $_IPS[\'AUDIO_FILE\'].'],
+                ]],
                 ['type' => 'ExpansionPanel', 'caption' => 'Global condition', 'items' => [
                     ['type' => 'Label', 'caption' => 'Applies to every announcement except urgent ones, e.g. "somebody is home".'],
                     ['type' => 'SelectCondition', 'name' => 'Condition', 'multi' => true],
