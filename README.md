@@ -1,6 +1,6 @@
 # Sprachausgabe (Symcon)
 
-Ansagen und Pushbenachrichtigungen für Symcon: ein Auslöser, eine Bedingung, ein Text, ein oder mehrere Ziele. Für Ansagen kennt eine **Zentrale** die Geräte und die globalen Schalter, jede **Ansage** ist eine eigene kleine Instanz. Pushbenachrichtigungen stehen alle in **einer** Instanz, der **Push Zentrale**.
+Ansagen und Pushbenachrichtigungen für Symcon: ein Auslöser, eine Bedingung, ein Text, ein oder mehrere Ziele. Die **Sprachausgabe Zentrale** kennt die Geräte, die globalen Schalter und alle Ansagen (als Liste). Pushbenachrichtigungen stehen ebenso in **einer** Instanz, der **Push Zentrale**.
 
 ## Inhaltsverzeichnis
 
@@ -30,20 +30,20 @@ Ansagen und Pushbenachrichtigungen für Symcon: ein Auslöser, eine Bedingung, e
 
 ## 3. Enthaltene Module
 
-- **Sprachausgabe Zentrale** (Splitter, Präfix `SPAZ`): Ausgabegeräte, globale Bedingung, Sperrfrist, Variablen Sprachausgabe, Ruhemodus, Lautstärke, Letzte Ansage.
-- **Sprachausgabe Ansage** (Gerät, Präfix `SPAA`): Auslöser, Text, Bedingung, Ziele, Lautstärke, Dringend; Variablen Aktiv und Letzte Ansage um.
+- **Sprachausgabe Zentrale** (Splitter, Präfix `SPAZ`): Ansagen (Liste mit Dialog: Auslöser, täglich um, Text, Ausgabegeräte, Lautstärke, Dringend, Bedingung), Ausgabegeräte, globale Bedingung, Sperrfrist, Variablen Sprachausgabe, Ruhemodus, Lautstärke, Letzte Ansage.
+- **Sprachausgabe Ansage** (Gerät, Präfix `SPAA`): **veraltet** – eine Instanz je Ansage. Bestehende Instanzen laufen weiter; in der Zentrale übernimmt „In die Liste übernehmen“ sie in die Ansageliste und löscht sie.
 - **Push Zentrale** (Gerät, Präfix `PUSHZ`): Empfänger, Nachrichtenliste, globale Bedingung, Sperrfrist; Variablen Benachrichtigungen (Hauptschalter), Letzte Benachrichtigung und je Nachricht und Empfänger ein Schalter.
 
 ## 4. Einrichten
 
 1. **Zentrale anlegen** und die Ausgabegeräte eintragen: Name (z. B. „Küche“), Art, Gerät oder Skript, Lautstärke, ob es ein Standardgerät ist.
 2. Optional eine **globale Bedingung** setzen, etwa „Jemand anwesend“.
-3. Je Ansage eine **Ansage-Instanz** anlegen, sie verbindet sich mit der Zentrale. Auslöser, Text und Bedingung eintragen, Ausgabegeräte anhaken (keins angehakt = Standardgeräte).
-4. Mit **Testansage** prüfen.
+3. Unter **Ansagen** je Ansage eine Zeile anlegen: Name, Auslöser (Bedingungs-Dialog), optional täglich um, Text, Ausgabegeräte anhaken (keins angehakt = Standardgeräte), Lautstärke, Dringend, Bedingung.
+4. Im Dialog mit **Text-Vorschau** und **Testansage** prüfen.
 
 **Eigenes Skript als Ausgabe:** Das Skript bekommt `$_IPS['TEXT']`, `$_IPS['VOLUME']` (0 = Gerätestandard) und `$_IPS['TARGET']` (Name des Ausgabegeräts).
 
-**Umstieg von eigenen Ansage-Skripten:** [tools/migrate_legacy.php](tools/migrate_legacy.php) übernimmt eine Kategorie mit Unterkategorien aus `switch`, `Zeitplan` und einem Skript mit festem Text und Auslöser-Ereignis. Als Skript-Inhalt ausführen; die Voreinstellung ist ein Probelauf, der nur einen Bericht ins Log schreibt. Mit `DRY_RUN = false` entstehen Zentrale und Ansagen, die alten Ereignisse werden deaktiviert, nicht gelöscht.
+**Umstieg von eigenen Ansage-Skripten:** [tools/migrate_legacy.php](tools/migrate_legacy.php) übernimmt eine Kategorie mit Unterkategorien aus `switch`, `Zeitplan` und einem Skript mit festem Text und Auslöser-Ereignis. Als Skript-Inhalt ausführen; die Voreinstellung ist ein Probelauf, der nur einen Bericht ins Log schreibt. Mit `DRY_RUN = false` entstehen Zentrale und Ansageliste, die alten Ereignisse werden deaktiviert, nicht gelöscht.
 
 ### Pushbenachrichtigungen
 
@@ -76,7 +76,8 @@ Ablauf: `oww_wake` → `listen_ack` → Mikrofon (0x07) → Voice → `speech_st
 ```php
 SPAZ_Speak(int $ZentraleID, string $Text, string $Ziele, int $Lautstaerke): string
 SPAZ_SpeakUrgent(int $ZentraleID, string $Text, string $Ziele, int $Lautstaerke): string
-SPAA_Trigger(int $AnsageID): string
+SPAZ_TriggerAnnouncement(int $ZentraleID, string $AnsageName): string
+SPAZ_ImportAnnouncements(int $ZentraleID): string
 PUSHZ_Trigger(int $PushZentraleID, string $NachrichtName): string
 PUSHZ_Send(int $PushZentraleID, string $Titel, string $Text, string $Empfaenger): string
 ```

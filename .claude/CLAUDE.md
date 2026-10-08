@@ -6,8 +6,8 @@ Projektwissen (Entscheidungen, Protokoll-Eigenheiten, Test-Rezepte): **`.claude/
 
 ## Aufbau
 
-- **`SprachausgabeZentrale/`** (SPAZ, Splitter): Ausgabegeräte, globale Bedingung, Sperrfrist, Warteschlange, KI-Stimme (Trait `libs/SpeechAiStore.php`, Hook `sprachausgabe`).
-- **`SprachausgabeAnsage/`** (SPAA, Gerät): Auslöser aus dem Bedingungs-Dialog (alte Instanzen werden umgestellt) und Zeitauslöser, Bedingung, Textvarianten mit Platzhaltern, Ziele.
+- **`SprachausgabeZentrale/`** (SPAZ, Splitter): Ansagen als Liste (Trait `libs/SpeechAnnouncements.php`), Ausgabegeräte, globale Bedingung, Sperrfrist, Warteschlange, KI-Stimme (Trait `libs/SpeechAiStore.php`, Hook `sprachausgabe`).
+- **`SprachausgabeAnsage/`** (SPAA, Gerät): **veraltet** (Instanz je Ansage); bleibt, bis Bestände per `SPAZ_ImportAnnouncements` übernommen sind.
 - **`PushZentrale/`** (PUSHZ, Gerät): Pushbenachrichtigungen – Empfänger (je Visualisierung), Nachrichten als Liste mit Dialog, Schalter je Nachricht und Empfänger, Verzögerung/Wiederholung (Formular in `libs/PushForm.php`, Versand in `libs/PushOutputs.php`).
 - **`EchoMuseGateway/`** (EMGW, Splitter auf einem Server Socket): Gerätelink der EchoMuse-Firmware, Freigabe, Wiedergabe, Sprachrunden-Vermittlung (Traits `libs/EmGateway*.php`).
 - **`EchoMuseGeraet/`** (EMGD): ein Dot mit Variablen und `SpeakFile`, `Beep`, `PlayCue`, `SendConfig`.

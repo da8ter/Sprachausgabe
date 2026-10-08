@@ -11,8 +11,9 @@ declare(strict_types=1);
  *  - Zentrale in der Kategorie, Ausgabegerät aus der Echo-Kennung der Skripte, Lautstärke über
  *    die bisherige Lautstärke-Variable, globale Bedingung aus den Regeln, die ALLE Ansagen teilen
  *    (z. B. Jemand anwesend, Hauptschalter) — die alten Schalter bleiben in der Visu wirksam;
- *  - je Altansage eine Ansage-Instanz in ihrer Kategorie (Auslöser, Wert, Wiederholung, Text,
- *    übrige Bedingungen, Aktiv = Ereignis war aktiv);
+ *  - je Altansage eine Ansage (Auslöser, Wert, Wiederholung, Text, übrige Bedingungen, Aktiv =
+ *    Ereignis war aktiv); seit 10/2026 zuerst als Instanz, die SPAZ_ImportAnnouncements am Ende in
+ *    die Ansageliste der Zentrale übernimmt;
  *  - die alten Auslöser-Ereignisse werden DEAKTIVIERT, nicht gelöscht (Rückweg: wieder aktivieren).
  * Bedingungen, die auf Schalter oder Zeitpläne ANDERER Altansagen zeigen (kopierte Ereignisse),
  * werden auf die eigene Kategorie umgehängt oder gestrichen und im Bericht genannt.
@@ -228,6 +229,10 @@ foreach ($plans as $plan) {
         $row['oldEvent'] = $plan['event'] . ' deaktiviert';
     }
     $report['announcements'][] = $row;
+}
+if (!DRY_RUN && $hub > 0) {
+    // since 10/2026 announcements are a list in the hub: move the instances just created into it
+    $report['list'] = SPAZ_ImportAnnouncements($hub);
 }
 IPS_LogMessage('SPA-Migration', json_encode($report, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 return json_encode($report, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
