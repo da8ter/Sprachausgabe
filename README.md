@@ -17,6 +17,7 @@ Ansagen und Pushbenachrichtigungen für Symcon: ein Auslöser, eine Bedingung, e
 - **KI-Stimme:** OpenAI, Microsoft Azure, ElevenLabs, Amazon Polly oder Google Gemini erzeugen eine Audiodatei; ein Skript bekommt `$_IPS['AUDIO_URL']` und `$_IPS['AUDIO_FILE']` und spielt sie auf Sonos, Media-Playern oder Ähnlichem ab. Jeder Text wird nur einmal erzeugt und bezahlt.
 - **Auslöser** im bekannten Bedingungs-Dialog der Konsole (Variable, Vergleich, Wert passend zum Typ): wenn die Regel erfüllt wird, solange sie erfüllt ist, bei jeder Aktualisierung oder Änderung; zusätzlich täglich zu einer Uhrzeit. Ältere Ansagen werden automatisch umgestellt.
 - **Text-Vorschau** im Formular: zeigt den fertigen Text mit ersetzten Platzhaltern.
+- **Wochenpläne:** gemeinsame „Sprechzeiten“ der Zentrale und je Ansage wahlweise ein eigener Wochenplan; außerhalb der Sprechzeit schweigt die Ansage, dringende sprechen immer.
 - **Pushbenachrichtigungen** (Push Zentrale): Nachrichten als Liste mit eigenem Dialog, Kachel-Visualisierung (mit Icon, Ton, Ziel beim Antippen) oder WebFront, Schalter je Nachricht und Person, Verzögerung („erst nach 60 min offen“) und Wiederholung, Text aus Skript.
 - **Bedingungen** mit Symcons eigenem Bedingungs-Editor: Anwesenheit, Zeitfenster, Wochentage, beliebige Variablen.
 - **Texte** mit Varianten (eine je Zeile, zufällig gewählt) und Platzhaltern: `{value}`, `{old}`, `{name}`, `{var:12345}`, `{time}`, `{date}`.

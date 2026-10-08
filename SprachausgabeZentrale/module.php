@@ -195,6 +195,7 @@ class SprachausgabeZentrale extends IPSModuleStrict
         return (string)json_encode([
             'elements' => [
                 $this->annFormList(),
+                $this->annScheduleButtons(),
                 ['type' => 'RowLayout', 'visible' => $legacy > 0, 'items' => [
                     ['type' => 'Label', 'caption' => sprintf($this->Translate('%d announcement instances are still connected to this hub.'), $legacy)],
                     ['type' => 'Button', 'caption' => 'Import them into the list', 'onClick' => 'echo SPAZ_ImportAnnouncements($id);',

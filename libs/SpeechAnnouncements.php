@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/SpeechText.php';
 require_once __DIR__ . '/SpeechTrigger.php';
+require_once __DIR__ . '/SpeechSchedule.php';
 
 /**
  * Ansagen als Liste in der Sprachausgabe Zentrale (Nutzerentscheid 08.10.2026, ersetzt die
@@ -18,6 +19,12 @@ trait SpeechAnnouncements
 {
     private const ANN_GUID = '{94CE47EF-0417-49FB-9DE9-6B292F709A06}';
     private const ANN_EVENT_PREFIX = 'ANNTIME_';
+    private const ANN_SCHEDULE_MAIN = 'SCHEDULE_MAIN';
+    private const ANN_SCHEDULE_PREFIX = 'ANNSCHED_';
+    /** Zeitplan je Ansage: keiner, Sprechzeiten der Zentrale, eigener Wochenplan. */
+    private const ANN_SCHEDULE_NONE = 0;
+    private const ANN_SCHEDULE_SHARED = 1;
+    private const ANN_SCHEDULE_OWN = 2;
 
     private function annRegister(): void
     {
@@ -45,7 +52,11 @@ trait SpeechAnnouncements
             $this->UnregisterReference($ref);
         }
         $wantedEvents = [];
+        $wantedSchedules = [];
         foreach ($this->annRows() as $row) {
+            if ((int)($row['Schedule'] ?? 0) === self::ANN_SCHEDULE_OWN) {
+                $wantedSchedules[self::ANN_SCHEDULE_PREFIX . $row['annId']] = $row;
+            }
             $var = SpeechTrigger::rule((string)($row['TriggerCondition'] ?? ''))['variableID'] ?? 0;
             if ($var > 0 && @IPS_VariableExists($var)) {
                 $this->RegisterMessage($var, VM_UPDATE);
@@ -63,6 +74,7 @@ trait SpeechAnnouncements
             }
         }
         $this->annMaintainTimeEvents($wantedEvents);
+        $this->annMaintainSchedules($wantedSchedules);
         return false;
     }
 
@@ -192,6 +204,11 @@ trait SpeechAnnouncements
                 ['type' => 'ExpansionPanel', 'caption' => 'Trigger', 'expanded' => true, 'items' => [
                     ['type' => 'SelectCondition', 'name' => 'TriggerCondition', 'caption' => 'Rule', 'multi' => false],
                     ['type' => 'Select', 'name' => 'TriggerMode', 'caption' => 'Trigger', 'options' => $modes, 'width' => '100%', 'value' => SpeechTrigger::MODE_BECOMES],
+                    ['type' => 'Select', 'name' => 'Schedule', 'caption' => 'Schedule', 'width' => '100%', 'value' => self::ANN_SCHEDULE_NONE, 'options' => [
+                        ['caption' => 'none', 'value' => self::ANN_SCHEDULE_NONE],
+                        ['caption' => 'shared speaking times of the hub', 'value' => self::ANN_SCHEDULE_SHARED],
+                        ['caption' => 'own schedule (appears under the hub after applying)', 'value' => self::ANN_SCHEDULE_OWN],
+                    ]],
                     ['type' => 'RowLayout', 'items' => [
                         ['type' => 'CheckBox', 'name' => 'TimeEnabled', 'caption' => 'additionally daily at', 'value' => false],
                         ['type' => 'SelectTime', 'name' => 'Time', 'caption' => 'Time', 'value' => '{"hour":7,"minute":0,"second":0}'],
@@ -217,6 +234,11 @@ trait SpeechAnnouncements
             'columns' => [
                 ['caption' => 'Active', 'name' => 'active', 'width' => '70px', 'add' => true, 'edit' => ['type' => 'CheckBox']],
                 ['caption' => 'Name', 'name' => 'name', 'width' => '220px', 'add' => '', 'save' => true],
+                ['caption' => 'Schedule', 'name' => 'Schedule', 'width' => '170px', 'add' => self::ANN_SCHEDULE_NONE, 'save' => true, 'edit' => ['type' => 'Select', 'options' => [
+                    ['caption' => '–', 'value' => self::ANN_SCHEDULE_NONE],
+                    ['caption' => 'speaking times', 'value' => self::ANN_SCHEDULE_SHARED],
+                    ['caption' => 'own', 'value' => self::ANN_SCHEDULE_OWN],
+                ]]],
                 ['caption' => 'Text', 'name' => 'Texts', 'width' => 'auto', 'add' => '', 'save' => true],
                 ['caption' => 'ID', 'name' => 'annId', 'width' => '0px', 'visible' => false, 'add' => '', 'save' => true],
             ]];
@@ -229,6 +251,10 @@ trait SpeechAnnouncements
     {
         if (!$test && !$this->conditionPassing((string)($row['Condition'] ?? ''))) {
             return 'condition not met';
+        }
+        if (!$test && !(bool)($row['Urgent'] ?? false) && !$this->annScheduleAllows($row)) {
+            $this->SendDebug('Announcement', $row['name'] . ': outside the schedule', 0);
+            return 'outside the schedule';
         }
         $template = SpeechText::pick((string)($row['Texts'] ?? ''));
         if ($template === '') {
@@ -245,6 +271,91 @@ trait SpeechAnnouncements
         $reason = $this->enqueue($text, $targets, (int)($row['Volume'] ?? 0), $test || (bool)($row['Urgent'] ?? false), $test ? '' : 'ann:' . $row['annId']);
         $this->SendDebug('Announcement', $row['name'] . ': ' . $text . ($reason !== '' ? ' — ' . $reason : ''), 0);
         return $reason;
+    }
+
+    /** Zeitplan der Ansage: gemeinsamer Plan der Zentrale oder eigener; dringende Ansagen kommen hier nicht an. */
+    private function annScheduleAllows(array $row): bool
+    {
+        $ident = match ((int)($row['Schedule'] ?? 0)) {
+            self::ANN_SCHEDULE_SHARED => self::ANN_SCHEDULE_MAIN,
+            self::ANN_SCHEDULE_OWN    => self::ANN_SCHEDULE_PREFIX . $row['annId'],
+            default                   => '',
+        };
+        if ($ident === '') {
+            return true;
+        }
+        $eid = @IPS_GetObjectIDByIdent($ident, $this->InstanceID);
+        if (!is_int($eid) || !IPS_EventExists($eid)) {
+            return true; // plan missing: never silence an announcement because of it
+        }
+        $event = IPS_GetEvent($eid);
+        return !($event['EventActive'] ?? false) || SpeechSchedule::allows((array)($event['ScheduleGroups'] ?? []), time());
+    }
+
+    /**
+     * Wochenpläne als Ereignisse unter der Zentrale: „Sprechzeiten“ immer, je Ansage mit eigenem Plan
+     * einer. Angelegt werden sie einmal mit 00:00 Ruhe / 08:00 Sprechen (eigene als Kopie der
+     * Sprechzeiten); danach gehören die Schaltpunkte dem Nutzer und werden nie überschrieben.
+     *
+     * @param array<string, array<string, mixed>> $wanted ident => row
+     */
+    private function annMaintainSchedules(array $wanted): void
+    {
+        $main = $this->annEnsureSchedule(self::ANN_SCHEDULE_MAIN, $this->Translate('Speaking times'), null);
+        $mainGroups = (array)(IPS_GetEvent($main)['ScheduleGroups'] ?? []);
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $child) {
+            $ident = (string)IPS_GetObject($child)['ObjectIdent'];
+            if (str_starts_with($ident, self::ANN_SCHEDULE_PREFIX) && !isset($wanted[$ident]) && IPS_EventExists($child)) {
+                IPS_DeleteEvent($child);
+            }
+        }
+        foreach ($wanted as $ident => $row) {
+            $eid = $this->annEnsureSchedule($ident, $this->Translate('Schedule') . ': ' . $row['name'], $mainGroups);
+            IPS_SetName($eid, $this->Translate('Schedule') . ': ' . $row['name']);
+        }
+    }
+
+    /** @param array<int, array<string, mixed>>|null $copyGroups Schaltpunkte für einen neuen Plan, null = Vorgabe */
+    private function annEnsureSchedule(string $ident, string $name, ?array $copyGroups): int
+    {
+        $eid = @IPS_GetObjectIDByIdent($ident, $this->InstanceID);
+        if (is_int($eid) && $eid > 0 && IPS_EventExists($eid)) {
+            return $eid;
+        }
+        $eid = IPS_CreateEvent(EVENTTYPE_SCHEDULE);
+        IPS_SetParent($eid, $this->InstanceID);
+        IPS_SetIdent($eid, $ident);
+        IPS_SetName($eid, $name);
+        IPS_SetEventScheduleAction($eid, SpeechSchedule::SPEAK, $this->Translate('Speak'), 0x00A000, '');
+        IPS_SetEventScheduleAction($eid, SpeechSchedule::QUIET, $this->Translate('Quiet'), 0x808080, '');
+        $groups = $copyGroups ?: [['ID' => 0, 'Days' => 127, 'Points' => [
+            ['ID' => 0, 'Start' => ['Hour' => 0, 'Minute' => 0, 'Second' => 0], 'ActionID' => SpeechSchedule::QUIET],
+            ['ID' => 1, 'Start' => ['Hour' => 8, 'Minute' => 0, 'Second' => 0], 'ActionID' => SpeechSchedule::SPEAK],
+        ]]];
+        foreach ($groups as $g) {
+            IPS_SetEventScheduleGroup($eid, (int)$g['ID'], (int)$g['Days']);
+            foreach ((array)($g['Points'] ?? []) as $p) {
+                IPS_SetEventScheduleGroupPoint($eid, (int)$g['ID'], (int)$p['ID'], (int)$p['Start']['Hour'], (int)$p['Start']['Minute'], (int)$p['Start']['Second'], (int)$p['ActionID']);
+            }
+        }
+        IPS_SetEventActive($eid, true);
+        return $eid;
+    }
+
+    /** Formular: Knöpfe zum Öffnen der Wochenpläne. */
+    private function annScheduleButtons(): array
+    {
+        $items = [];
+        foreach (IPS_GetChildrenIDs($this->InstanceID) as $child) {
+            $ident = (string)IPS_GetObject($child)['ObjectIdent'];
+            if (IPS_EventExists($child) && ($ident === self::ANN_SCHEDULE_MAIN || str_starts_with($ident, self::ANN_SCHEDULE_PREFIX))) {
+                $items[] = ['type' => 'OpenObjectButton', 'caption' => IPS_GetName($child), 'objectID' => $child];
+            }
+        }
+        return ['type' => 'ExpansionPanel', 'caption' => 'Schedules', 'items' => [
+            ['type' => 'Label', 'caption' => 'Each announcement uses no schedule, the shared speaking times or its own schedule (choose in its dialog). Outside "Speak" it stays silent; urgent announcements always speak.'],
+            ['type' => 'RowLayout', 'items' => $items ?: [['type' => 'Label', 'caption' => 'Created on the next apply']]],
+        ]];
     }
 
     /** @return array<int, array<string, mixed>> */

@@ -106,7 +106,20 @@
             "name of the trigger variable": "Name der Auslöser-Variable",
             "formatted value of any variable (replace 12345 with its ID)": "formatierter Wert einer beliebigen Variable (12345 durch ihre ID ersetzen)",
             "time (HH:MM)": "Uhrzeit (HH:MM)",
-            "date (DD.MM.YYYY)": "Datum (TT.MM.JJJJ)"
+            "date (DD.MM.YYYY)": "Datum (TT.MM.JJJJ)",
+            "Speaking times": "Sprechzeiten",
+            "Schedule": "Zeitplan",
+            "Schedules": "Wochenpläne",
+            "Speak": "Sprechen",
+            "Quiet": "Ruhe",
+            "none": "keiner",
+            "shared speaking times of the hub": "gemeinsame Sprechzeiten der Zentrale",
+            "own schedule (appears under the hub after applying)": "eigener Wochenplan (erscheint nach dem Übernehmen unter der Zentrale)",
+            "speaking times": "Sprechzeiten",
+            "own": "eigener",
+            "Each announcement uses no schedule, the shared speaking times or its own schedule (choose in its dialog). Outside \"Speak\" it stays silent; urgent announcements always speak.": "Jede Ansage nutzt keinen Zeitplan, die gemeinsamen Sprechzeiten oder einen eigenen Wochenplan (Auswahl im Dialog der Ansage). Außerhalb von „Sprechen“ schweigt sie; dringende Ansagen sprechen immer.",
+            "Created on the next apply": "Wird beim nächsten Übernehmen angelegt",
+            "outside the schedule": "außerhalb des Zeitplans"
         }
     }
 }

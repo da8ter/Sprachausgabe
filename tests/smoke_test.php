@@ -38,6 +38,16 @@ function IPS_SetEventCyclicTimeFrom(int $id, int $h, int $m, int $s): bool { $GL
 function IPS_SetEventScript(int $id, string $code): bool { $GLOBALS['events'][$id]['script'] = $code; return true; }
 function IPS_SetEventActive(int $id, bool $active): bool { $GLOBALS['events'][$id]['active'] = $active; return true; }
 function IPS_SetHidden(int $id, bool $hidden): bool { return true; }
+function IPS_SetEventScheduleAction(int $id, int $action, string $name, int $color, string $script): bool { $GLOBALS['events'][$id]['actions'][$action] = $name; return true; }
+function IPS_SetEventScheduleGroup(int $id, int $group, int $days): bool { $GLOBALS['events'][$id]['groups'][$group] = ['ID' => $group, 'Days' => $days, 'Points' => []]; return true; }
+function IPS_SetEventScheduleGroupPoint(int $id, int $group, int $point, int $h, int $m, int $s, int $action): bool {
+    $GLOBALS['events'][$id]['groups'][$group]['Points'][$point] = ['ID' => $point, 'Start' => ['Hour' => $h, 'Minute' => $m, 'Second' => $s], 'ActionID' => $action];
+    return true;
+}
+function IPS_GetEvent(int $id): array {
+    $e = $GLOBALS['events'][$id] ?? [];
+    return ['EventActive' => $e['active'] ?? false, 'ScheduleGroups' => array_values(array_map(static fn(array $g): array => ['Points' => array_values($g['Points'])] + $g, $e['groups'] ?? []))];
+}
 function IPS_GetOption(string $o): mixed { return $o === 'ScriptOutputBufferLimit' ? 1048576 : 0; }
 function IPS_IsConditionPassing(string $c): bool { return $GLOBALS['conditions'][$c] ?? true; }
 function GetValueFormatted(int $id): string
@@ -389,6 +399,52 @@ $out = SPAZ_TestAnnouncement($hl, 'Probe', '', json_encode(['Küche' => false, '
 Kernel::advance(1);
 check(str_contains($out, 'Gesendet') && $taken() === [['fully', $fully, 'Probe', 0]], 'Test im Dialog spricht auf den angehakten Geräten');
 check(is_array(json_decode(Kernel::$instances[$hl]['object']->GetConfigurationForm(), true)), 'Formular mit Ansageliste ist gültiges JSON');
+
+section('Wochenpläne: Sprechzeiten der Zentrale und eigener Plan');
+$g = [['ID' => 0, 'Days' => 127, 'Points' => [['ID' => 0, 'Start' => ['Hour' => 0, 'Minute' => 0, 'Second' => 0], 'ActionID' => 2], ['ID' => 1, 'Start' => ['Hour' => 8, 'Minute' => 0, 'Second' => 0], 'ActionID' => 1]]]];
+check(SpeechSchedule::actionAt($g, mktime(7, 59, 0, 10, 8, 2026)) === 2 && SpeechSchedule::actionAt($g, mktime(8, 0, 0, 10, 8, 2026)) === 1 && SpeechSchedule::actionAt($g, mktime(23, 0, 0, 10, 8, 2026)) === 1,
+    'Standardplan: vor 08:00 Ruhe, ab 08:00 Sprechen');
+$we = [['ID' => 0, 'Days' => 31, 'Points' => [['ID' => 0, 'Start' => ['Hour' => 6, 'Minute' => 0, 'Second' => 0], 'ActionID' => 1], ['ID' => 1, 'Start' => ['Hour' => 22, 'Minute' => 0, 'Second' => 0], 'ActionID' => 2]]],
+    ['ID' => 1, 'Days' => 96, 'Points' => [['ID' => 0, 'Start' => ['Hour' => 9, 'Minute' => 0, 'Second' => 0], 'ActionID' => 1]]]];
+check(SpeechSchedule::actionAt($we, mktime(7, 0, 0, 10, 10, 2026)) === 2, 'Samstag 07:00: noch Ruhe vom Freitag 22:00 (Schaltpunkt des Vortags)');
+check(SpeechSchedule::actionAt($we, mktime(5, 0, 0, 10, 12, 2026)) === 1 && SpeechSchedule::allows([], time()), 'Montag 05:00: noch Sprechen vom Sonntag; leerer Plan sperrt nichts');
+$main = @IPS_GetObjectIDByIdent('SCHEDULE_MAIN', $hl);
+check(is_int($main) && ($GLOBALS['events'][$main]['type'] ?? -1) === 2 && count($GLOBALS['events'][$main]['groups'][0]['Points']) === 2, 'Zentrale legt den Wochenplan „Sprechzeiten“ an (00:00 Ruhe, 08:00 Sprechen)');
+$quietAll = static function (int $eid): void { $GLOBALS['events'][$eid]['groups'] = [0 => ['ID' => 0, 'Days' => 127, 'Points' => [0 => ['ID' => 0, 'Start' => ['Hour' => 0, 'Minute' => 0, 'Second' => 0], 'ActionID' => 2]]]]; };
+$quietAll($main);
+$annRows = json_decode(IPS_GetProperty($hl, 'Announcements'), true);
+$annRows[0]['active'] = true;
+$annRows[0]['Schedule'] = 1;
+IPS_SetProperty($hl, 'Announcements', json_encode($annRows));
+IPS_ApplyChanges($hl);
+$GLOBALS['calls'] = [];
+$fire($wash, 'Run');
+$fire($wash, 'Finished');
+Kernel::advance(1);
+check($taken() === [] && count($GLOBALS['events'][$main]['groups'][0]['Points']) === 1, 'Sprechzeiten auf Ruhe: Ansage schweigt; vorhandene Schaltpunkte werden nicht überschrieben');
+$annRows[0]['Urgent'] = true;
+IPS_SetProperty($hl, 'Announcements', json_encode($annRows));
+IPS_ApplyChanges($hl);
+$fire($wash, 'Run');
+$fire($wash, 'Finished');
+Kernel::advance(1);
+check(count($taken()) === 1, 'dringende Ansage spricht trotz Ruhezeit');
+$annRows[0]['Urgent'] = false;
+$annRows[0]['Schedule'] = 2;
+IPS_SetProperty($hl, 'Announcements', json_encode($annRows));
+IPS_ApplyChanges($hl);
+$own = @IPS_GetObjectIDByIdent('ANNSCHED_' . $annRows[0]['annId'], $hl);
+check(is_int($own) && $GLOBALS['events'][$own]['groups'][0]['Points'][0]['ActionID'] === 2 && str_contains(IPS_GetName($own), 'Wäsche'),
+    'eigener Wochenplan wird als Kopie der Sprechzeiten angelegt und nach der Ansage benannt');
+$GLOBALS['events'][$own]['groups'][0]['Points'][0]['ActionID'] = 1;
+$fire($wash, 'Run');
+$fire($wash, 'Finished');
+Kernel::advance(1);
+check(count($taken()) === 1, 'eigener Plan auf Sprechen: Ansage spricht, obwohl die Sprechzeiten Ruhe haben');
+$annRows[0]['Schedule'] = 0;
+IPS_SetProperty($hl, 'Announcements', json_encode($annRows));
+IPS_ApplyChanges($hl);
+check(!is_int(@IPS_GetObjectIDByIdent('ANNSCHED_' . $annRows[0]['annId'], $hl)) && is_int(@IPS_GetObjectIDByIdent('SCHEDULE_MAIN', $hl)), 'kein Zeitplan mehr: eigener Plan wird gelöscht, die Sprechzeiten bleiben');
 
 section('Ansage-Instanzen in die Liste übernehmen');
 $hi = Kernel::createInstance(HUB);
