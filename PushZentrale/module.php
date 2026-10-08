@@ -197,32 +197,31 @@ class PushZentrale extends IPSModuleStrict
     }
 
     /** Formular (Empfänger): Testnachricht an einen Empfänger. */
-    public function TestRecipient(string $name): void
+    public function TestRecipient(string $name): string
     {
         $recipient = $this->findRecipient($name);
         if ($recipient === null) {
-            echo $this->Translate('Recipient not found');
-            return;
+            return $this->Translate('Recipient not found');
         }
         $error = PushOutputs::send($recipient, 'Symcon', $this->Translate('This is a test notification.'), 'Alert', '', 0);
-        echo $error === '' ? $this->Translate('Sent') : $this->Translate('Failed') . ': ' . $this->Translate($error);
+        return $error === '' ? $this->Translate('Sent') : $this->Translate('Failed') . ': ' . $this->Translate($error);
     }
 
     /** Formular (Dialog einer Nachricht): Titel und Text mit ersetzten Platzhaltern, auch ungespeichert. */
-    public function PreviewMessage(string $Title, string $Texts, int $TextScript, string $TriggerCondition): void
+    public function PreviewMessage(string $Title, string $Texts, int $TextScript, string $TriggerCondition): string
     {
         $m = ['Title' => $Title, 'Texts' => $Texts, 'TextScript' => $TextScript, 'TriggerCondition' => $TriggerCondition];
         [$title, $text] = $this->compose($m, null);
-        echo ($title !== '' ? $title . "\n\n" : '') . ($text !== '' ? $text : $this->Translate('No text entered'));
+        return ($title !== '' ? $title . "\n\n" : '') . ($text !== '' ? $text : $this->Translate('No text entered'));
     }
 
     /** Formular (Dialog einer Nachricht): einmal an alle Empfänger senden, ohne Schalter und Bedingungen. */
-    public function TestMessage(string $Title, string $Texts, int $TextScript, string $TriggerCondition, string $Icon, string $Sound, int $TargetObject): void
+    public function TestMessage(string $Title, string $Texts, int $TextScript, string $TriggerCondition, string $Icon, string $Sound, int $TargetObject): string
     {
         $m = ['Title' => $Title, 'Texts' => $Texts, 'TextScript' => $TextScript, 'TriggerCondition' => $TriggerCondition, 'Icon' => $Icon, 'Sound' => $Sound, 'TargetObject' => $TargetObject];
         [$title, $text] = $this->compose($m, null);
         $reason = $this->deliver($title, $text, $Icon, $Sound, $TargetObject, $this->names(), true, '');
-        echo $reason === '' ? $this->Translate('Sent') : $this->Translate('Not sent') . ': ' . $this->Translate($reason);
+        return $reason === '' ? $this->Translate('Sent') : $this->Translate('Not sent') . ': ' . $this->Translate($reason);
     }
 
     // ------------------------------------------------------------------ internals

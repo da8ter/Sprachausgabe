@@ -38,8 +38,8 @@ trait PushForm
                     ['type' => 'SelectObject', 'name' => 'TargetObject', 'caption' => 'Opens on tap', 'value' => 0],
                 ]],
                 ['type' => 'RowLayout', 'items' => [
-                    ['type' => 'Button', 'caption' => 'Preview text', 'onClick' => 'PUSHZ_PreviewMessage($id, $Title, $Texts, $TextScript, $TriggerCondition);'],
-                    ['type' => 'Button', 'caption' => 'Send test to all', 'onClick' => 'PUSHZ_TestMessage($id, $Title, $Texts, $TextScript, $TriggerCondition, $Icon, $Sound, $TargetObject);'],
+                    ['type' => 'Button', 'caption' => 'Preview text', 'onClick' => 'echo PUSHZ_PreviewMessage($id, $Title, $Texts, $TextScript, $TriggerCondition);'],
+                    ['type' => 'Button', 'caption' => 'Send test to all', 'onClick' => 'echo PUSHZ_TestMessage($id, $Title, $Texts, $TextScript, $TriggerCondition, $Icon, $Sound, $TargetObject);'],
                 ]],
             ]],
             ['type' => 'ExpansionPanel', 'caption' => 'Condition', 'items' => [
@@ -68,7 +68,7 @@ trait PushForm
                     ['type' => 'Label', 'caption' => 'A push always goes to every device of the chosen visualization. For single persons or devices create one visualization each and enable only those devices in its "Notifications" tab.'],
                     ['type' => 'RowLayout', 'items' => [
                         ['type' => 'Select', 'name' => 'TestTarget', 'caption' => 'Recipient', 'options' => array_map(static fn(string $n): array => ['caption' => $n, 'value' => $n], $names ?: [''])],
-                        ['type' => 'Button', 'caption' => 'Send test', 'onClick' => 'PUSHZ_TestRecipient($id, $TestTarget);'],
+                        ['type' => 'Button', 'caption' => 'Send test', 'onClick' => 'echo PUSHZ_TestRecipient($id, $TestTarget);'],
                     ]],
                 ]],
                 ['type' => 'ExpansionPanel', 'caption' => 'Global condition', 'items' => [

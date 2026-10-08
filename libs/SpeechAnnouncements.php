@@ -92,24 +92,23 @@ trait SpeechAnnouncements
     }
 
     /** Dialog einer Ansage: alle Varianten mit ersetzten Platzhaltern, auch ungespeichert. */
-    public function PreviewAnnouncement(string $Texts, string $TriggerCondition): void
+    public function PreviewAnnouncement(string $Texts, string $TriggerCondition): string
     {
-        echo SpeechText::preview($Texts, SpeechTrigger::rule($TriggerCondition)['variableID'] ?? 0, $this->Translate('No text entered'));
+        return SpeechText::preview($Texts, SpeechTrigger::rule($TriggerCondition)['variableID'] ?? 0, $this->Translate('No text entered'));
     }
 
     /** Dialog einer Ansage: einmal sprechen, dringend (ohne Schalter, Bedingungen und Sperrfrist). $Targets = JSON {Gerät: bool}. */
-    public function TestAnnouncement(string $Texts, string $TriggerCondition, string $Targets, int $Volume): void
+    public function TestAnnouncement(string $Texts, string $TriggerCondition, string $Targets, int $Volume): string
     {
         $template = SpeechText::pick($Texts);
         if ($template === '') {
-            echo $this->Translate('No text entered');
-            return;
+            return $this->Translate('No text entered');
         }
         $text = SpeechText::render($template, SpeechTrigger::rule($TriggerCondition)['variableID'] ?? 0, null, time());
         $map = json_decode($Targets, true);
         $targets = array_keys(array_filter(is_array($map) ? $map : []));
         $reason = $this->enqueue($text, array_map('strval', $targets), $Volume, true, '');
-        echo $reason === '' ? $this->Translate('Sent') : $this->Translate('Not sent') . ': ' . $this->Translate($reason);
+        return $reason === '' ? $this->Translate('Sent') : $this->Translate('Not sent') . ': ' . $this->Translate($reason);
     }
 
     /**
@@ -211,8 +210,8 @@ trait SpeechAnnouncements
                     ['type' => 'SelectCondition', 'name' => 'Condition', 'multi' => true],
                 ]],
                 ['type' => 'RowLayout', 'items' => [
-                    ['type' => 'Button', 'caption' => 'Preview text', 'onClick' => 'SPAZ_PreviewAnnouncement($id, $Texts, $TriggerCondition);'],
-                    ['type' => 'Button', 'caption' => 'Test announcement', 'onClick' => 'SPAZ_TestAnnouncement($id, $Texts, $TriggerCondition, ' . $targetJson . ', $Volume);'],
+                    ['type' => 'Button', 'caption' => 'Preview text', 'onClick' => 'echo SPAZ_PreviewAnnouncement($id, $Texts, $TriggerCondition);'],
+                    ['type' => 'Button', 'caption' => 'Test announcement', 'onClick' => 'echo SPAZ_TestAnnouncement($id, $Texts, $TriggerCondition, ' . $targetJson . ', $Volume);'],
                 ]],
             ],
             'columns' => [

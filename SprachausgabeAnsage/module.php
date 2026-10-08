@@ -130,16 +130,16 @@ class SprachausgabeAnsage extends IPSModuleStrict
     }
 
     /** Formular: alle Textvarianten mit ersetzten Platzhaltern zeigen (Werte aus dem Formular, auch ungespeichert). */
-    public function Preview(string $Texts, string $TriggerCondition): void
+    public function Preview(string $Texts, string $TriggerCondition): string
     {
-        echo SpeechText::preview($Texts, SpeechTrigger::rule($TriggerCondition)['variableID'] ?? 0, $this->Translate('No text entered'));
+        return SpeechText::preview($Texts, SpeechTrigger::rule($TriggerCondition)['variableID'] ?? 0, $this->Translate('No text entered'));
     }
 
     /** Formular: einmal sprechen, ohne Aktiv-Schalter und Bedingung. */
-    public function Test(): void
+    public function Test(): string
     {
         $reason = $this->announce(null, true);
-        echo $reason === '' ? $this->Translate('Sent') : $this->Translate('Not sent') . ': ' . $this->Translate($reason);
+        return $reason === '' ? $this->Translate('Sent') : $this->Translate('Not sent') . ': ' . $this->Translate($reason);
     }
 
     public function GetConfigurationForm(): string
@@ -161,7 +161,7 @@ class SprachausgabeAnsage extends IPSModuleStrict
                 ['type' => 'ValidationTextBox', 'name' => 'Texts', 'caption' => 'Text (one variant per line)', 'multiline' => true, 'width' => '100%'],
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'Label', 'caption' => 'Placeholders: {value} {old} {name} {var:12345} {time} {date}'],
-                    ['type' => 'Button', 'caption' => 'Preview text', 'onClick' => 'SPAA_Preview($id, $Texts, $TriggerCondition);'],
+                    ['type' => 'Button', 'caption' => 'Preview text', 'onClick' => 'echo SPAA_Preview($id, $Texts, $TriggerCondition);'],
                 ]],
                 ['type' => 'ExpansionPanel', 'caption' => 'Condition', 'items' => [
                     ['type' => 'SelectCondition', 'name' => 'Condition', 'multi' => true],
@@ -178,7 +178,7 @@ class SprachausgabeAnsage extends IPSModuleStrict
                 ]],
             ],
             'actions' => [
-                ['type' => 'Button', 'caption' => 'Test announcement', 'onClick' => 'SPAA_Test($id);'],
+                ['type' => 'Button', 'caption' => 'Test announcement', 'onClick' => 'echo SPAA_Test($id);'],
             ],
             'status' => [
                 ['code' => 201, 'icon' => 'inactive', 'caption' => 'No text entered'],

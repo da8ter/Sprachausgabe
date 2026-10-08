@@ -165,12 +165,11 @@ class SprachausgabeZentrale extends IPSModuleStrict
     }
 
     /** Formular: Ansage auf einem Gerät der Liste testen. */
-    public function TestOutput(string $name): void
+    public function TestOutput(string $name): string
     {
         $output = $this->findOutput($name);
         if ($output === null) {
-            echo $this->Translate('Output not found');
-            return;
+            return $this->Translate('Output not found');
         }
         $text = $this->Translate('This is a test announcement.');
         if (($output['type'] ?? '') === SpeechOutputs::AI_SCRIPT) {
@@ -179,7 +178,7 @@ class SprachausgabeZentrale extends IPSModuleStrict
             $output['audio'] = $this->aiAudio($text, true);
         }
         $error = SpeechOutputs::speak($output, $text, $this->volumeFor($output, 0));
-        echo $error === '' ? $this->Translate('Sent') : $this->Translate('Failed') . ': ' . $error;
+        return $error === '' ? $this->Translate('Sent') : $this->Translate('Failed') . ': ' . $error;
     }
 
     public function GetConfigurationForm(): string
@@ -224,7 +223,7 @@ class SprachausgabeZentrale extends IPSModuleStrict
             'actions' => [
                 ['type' => 'RowLayout', 'items' => [
                     ['type' => 'Select', 'name' => 'TestTarget', 'caption' => 'Output', 'options' => array_map(static fn(string $n): array => ['caption' => $n, 'value' => $n], $names ?: [''])],
-                    ['type' => 'Button', 'caption' => 'Test', 'onClick' => 'SPAZ_TestOutput($id, $TestTarget);'],
+                    ['type' => 'Button', 'caption' => 'Test', 'onClick' => 'echo SPAZ_TestOutput($id, $TestTarget);'],
                 ]],
             ],
             'status' => [],
