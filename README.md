@@ -86,4 +86,5 @@ PUSHZ_Send(int $PushZentraleID, string $Titel, string $Text, string $Empfaenger)
 
 ## 6. Versionshistorie
 
+- **0.2**: Ansagen als Liste in der Zentrale (Dialog je Ansage, Text-Vorschau, Testansage, Übernahme bestehender Ansage-Instanzen per Knopf); Auslöser über den Bedingungs-Dialog der Konsole mit Auslöse-Art; neues Modul **Push Zentrale** für Pushbenachrichtigungen (Empfänger je Visualisierung, Nachrichtenliste, Schalter je Nachricht und Person, Verzögerung und Wiederholung, Textskript) samt Übernahme-Werkzeug `tools/migrate_push.php`; EchoMuse Gateway, Gerät und Voice.
 - **0.1**: Erste Version: Zentrale mit Echo, Fully Kiosk, Skript-Ausgabe und KI-Stimme (OpenAI, Azure, ElevenLabs, Amazon Polly, Google Gemini; Audiodatei über den Webhook `/hook/sprachausgabe`), Lautstärke-Variable je Gerät, Warteschlange und Sperrfrist; Ansage mit Variablen- und Zeitauslöser, Bedingung, Textvarianten und Platzhaltern. Rauchtest [tests/smoke_test.php](tests/smoke_test.php) (nutzt den Prüfstand-Kernel aus `modules/LGThinQ`).
