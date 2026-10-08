@@ -10,14 +10,14 @@ require_once __DIR__ . '/SpeechSchedule.php';
  * Ansagen als Liste in der Sprachausgabe Zentrale (Nutzerentscheid 08.10.2026, ersetzt die
  * Instanz je Ansage). Jede Zeile: Name, Aktiv, Auslöser aus dem Bedingungs-Dialog, optional
  * täglich zu einer Uhrzeit, Textvarianten, Bedingung, Ausgabegeräte (ein Häkchen je Gerät der
- * Zentrale, keins = Standardgeräte), Lautstärke, Dringend. Gesprochen wird über enqueue() der
- * Zentrale, die Hauptschalter, Ruhemodus, Bedingung, Sperrfrist und Warteschlange kennt.
+ * Zentrale, keins = Standardgeräte), Lautstärke, Dringend, Zeitplan. Je Ansage gibt es eine
+ * Schaltvariable unter der Zentrale (Ident A_<annId>) für die Visualisierung. Gesprochen wird über
+ * enqueue() der Zentrale, die Hauptschalter, Ruhemodus, Bedingung, Sperrfrist und Warteschlange kennt.
  *
  * Erwartet von der Klasse: enqueue(), outputs(), conditionPassing(), Translate().
  */
 trait SpeechAnnouncements
 {
-    private const ANN_GUID = '{94CE47EF-0417-49FB-9DE9-6B292F709A06}';
     private const ANN_EVENT_PREFIX = 'ANNTIME_';
     private const ANN_SCHEDULE_MAIN = 'SCHEDULE_MAIN';
     private const ANN_SCHEDULE_PREFIX = 'ANNSCHED_';
@@ -29,6 +29,7 @@ trait SpeechAnnouncements
     private function annRegister(): void
     {
         $this->RegisterPropertyString('Announcements', '[]');
+        $this->RegisterAttributeString('AnnSwitchIdents', '[]');
         // Symcon rejects IPS_ApplyChanges of the own instance inside ApplyChanges (re-entrant): apply again via timer
         $this->RegisterTimer('Reapply', 0, 'IPS_ApplyChanges($_IPS[\'TARGET\']);');
     }
@@ -75,6 +76,7 @@ trait SpeechAnnouncements
         }
         $this->annMaintainTimeEvents($wantedEvents);
         $this->annMaintainSchedules($wantedSchedules);
+        $this->annMaintainSwitches();
         return false;
     }
 
@@ -121,66 +123,6 @@ trait SpeechAnnouncements
         $targets = array_keys(array_filter(is_array($map) ? $map : []));
         $reason = $this->enqueue($text, array_map('strval', $targets), $Volume, true, '');
         return $reason === '' ? $this->Translate('Sent') : $this->Translate('Not sent') . ': ' . $this->Translate($reason);
-    }
-
-    /**
-     * Übernimmt die Ansage-Instanzen (Modul „Sprachausgabe Ansage“) dieser Zentrale in die Liste und
-     * löscht sie samt ihren Variablen und Zeitereignissen. Liefert einen Bericht.
-     */
-    public function ImportAnnouncements(): string
-    {
-        $rows = json_decode($this->ReadPropertyString('Announcements'), true);
-        $rows = is_array($rows) ? $rows : [];
-        $outputs = array_column($this->outputs(), 'name');
-        $report = [];
-        foreach (IPS_GetInstanceListByModuleID(self::ANN_GUID) as $inst) {
-            if (IPS_GetInstance($inst)['ConnectionID'] !== $this->InstanceID) {
-                continue;
-            }
-            $p = static fn(string $name): mixed => @IPS_GetProperty($inst, $name);
-            $condition = (string)$p('TriggerCondition');
-            $mode = (int)$p('TriggerMode');
-            if ($condition === '' && (int)$p('TriggerVariable') > 0) {
-                $var = @IPS_GetVariable((int)$p('TriggerVariable'));
-                $legacy = SpeechTrigger::legacyToCondition((int)$p('TriggerVariable'), (int)$p('TriggerRule'), (string)$p('TriggerValue'),
-                    (bool)$p('Repeat'), is_array($var) ? (int)$var['VariableType'] : VARIABLETYPE_STRING);
-                [$condition, $mode] = [$legacy['condition'], $legacy['mode']];
-            }
-            $name = IPS_GetName($inst);
-            if (in_array($name, ['Sprachausgabe Ansage', 'Sprachausgabe - Ansage', 'Ansage'], true)) {
-                $name = IPS_GetName(IPS_GetParent($inst));
-            }
-            $activeId = @IPS_GetObjectIDByIdent('ACTIVE', $inst);
-            $row = [
-                'annId' => '', 'active' => is_int($activeId) ? GetValueBoolean($activeId) : true, 'name' => $name,
-                'TriggerCondition' => $condition, 'TriggerMode' => $mode,
-                'TimeEnabled' => (bool)$p('TimeEnabled'), 'Time' => (string)$p('Time'), 'Texts' => (string)$p('Texts'),
-                'Condition' => (string)$p('Condition'), 'Volume' => (int)$p('Volume'), 'Urgent' => (bool)$p('Urgent'),
-            ];
-            $targets = json_decode((string)$p('Targets'), true);
-            foreach (is_array($targets) ? $targets : [] as $t) {
-                if (is_array($t) && ($t['use'] ?? false) && in_array((string)($t['name'] ?? ''), $outputs, true)) {
-                    $row[self::annTargetKey((string)$t['name'])] = true;
-                }
-            }
-            $rows[] = $row;
-            foreach (IPS_GetChildrenIDs($inst) as $child) {
-                $o = IPS_GetObject($child);
-                match ($o['ObjectType']) {
-                    OBJECTTYPE_VARIABLE => IPS_DeleteVariable($child),
-                    OBJECTTYPE_EVENT    => IPS_DeleteEvent($child),
-                    default             => null,
-                };
-            }
-            $deleted = @IPS_DeleteInstance($inst);
-            $report[] = sprintf('%s (#%d)%s', $name, $inst, $deleted ? '' : ' — ' . $this->Translate('instance could not be deleted'));
-        }
-        if ($report === []) {
-            return $this->Translate('No announcement instances found');
-        }
-        IPS_SetProperty($this->InstanceID, 'Announcements', (string)json_encode($rows, JSON_UNESCAPED_UNICODE));
-        IPS_ApplyChanges($this->InstanceID);
-        return sprintf($this->Translate('%d announcements imported'), count($report)) . ":\n" . implode("\n", $report);
     }
 
     /** Formular: Liste der Ansagen mit eigenem Dialog je Zeile. */
@@ -249,6 +191,9 @@ trait SpeechAnnouncements
     /** @return string '' wenn eingereiht, sonst der Grund */
     private function annSpeak(array $row, mixed $old, bool $test): string
     {
+        if (!$test && !$this->annSwitchOn($row)) {
+            return 'announcement is switched off';
+        }
         if (!$test && !$this->conditionPassing((string)($row['Condition'] ?? ''))) {
             return 'condition not met';
         }
@@ -271,6 +216,41 @@ trait SpeechAnnouncements
         $reason = $this->enqueue($text, $targets, (int)($row['Volume'] ?? 0), $test || (bool)($row['Urgent'] ?? false), $test ? '' : 'ann:' . $row['annId']);
         $this->SendDebug('Announcement', $row['name'] . ': ' . $text . ($reason !== '' ? ' — ' . $reason : ''), 0);
         return $reason;
+    }
+
+    /** Je Ansage eine Schaltvariable (neu = an); umbenannte Ansagen benennen sie mit um. */
+    private function annMaintainSwitches(): void
+    {
+        $old = json_decode($this->ReadAttributeString('AnnSwitchIdents'), true) ?: [];
+        $now = [];
+        $position = 100;
+        foreach ($this->annRows() as $row) {
+            $ident = 'A_' . $row['annId'];
+            $caption = trim((string)$row['name']);
+            $isNew = !is_int(@IPS_GetObjectIDByIdent($ident, $this->InstanceID));
+            $this->MaintainVariable($ident, $caption, VARIABLETYPE_BOOLEAN, [
+                'PRESENTATION' => VARIABLE_PRESENTATION_SWITCH,
+                'ICON_TRUE'    => 'Speaker',
+                'ICON_FALSE'   => 'Speaker',
+            ], $position++, true);
+            $this->EnableAction($ident);
+            if ($isNew) {
+                $this->SetValue($ident, true);
+            } elseif (IPS_GetName($this->GetIDForIdent($ident)) !== $caption) {
+                IPS_SetName($this->GetIDForIdent($ident), $caption);
+            }
+            $now[] = $ident;
+        }
+        foreach (array_diff($old, $now) as $gone) {
+            $this->MaintainVariable((string)$gone, '', VARIABLETYPE_BOOLEAN, [], 0, false);
+        }
+        $this->WriteAttributeString('AnnSwitchIdents', (string)json_encode(array_values($now)));
+    }
+
+    private function annSwitchOn(array $row): bool
+    {
+        $vid = @IPS_GetObjectIDByIdent('A_' . $row['annId'], $this->InstanceID);
+        return !is_int($vid) || GetValueBoolean($vid);
     }
 
     /** Zeitplan der Ansage: gemeinsamer Plan der Zentrale oder eigener; dringende Ansagen kommen hier nicht an. */

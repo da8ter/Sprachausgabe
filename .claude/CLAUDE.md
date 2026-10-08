@@ -6,8 +6,7 @@ Projektwissen (Entscheidungen, Protokoll-Eigenheiten, Test-Rezepte): **`.claude/
 
 ## Aufbau
 
-- **`SprachausgabeZentrale/`** (SPAZ, Splitter): Ansagen als Liste (Trait `libs/SpeechAnnouncements.php`), Ausgabegeräte, globale Bedingung, Sperrfrist, Warteschlange, KI-Stimme (Trait `libs/SpeechAiStore.php`, Hook `sprachausgabe`).
-- **`SprachausgabeAnsage/`** (SPAA, Gerät): **veraltet** (Instanz je Ansage); bleibt, bis Bestände per `SPAZ_ImportAnnouncements` übernommen sind.
+- **`SprachausgabeZentrale/`** (SPAZ, Gerät): Ansagen als Liste mit Schaltvariable je Ansage und Wochenplänen (Trait `libs/SpeechAnnouncements.php`), Ausgabegeräte, globale Bedingung, Sperrfrist, Warteschlange, KI-Stimme (Trait `libs/SpeechAiStore.php`, Hook `sprachausgabe`).
 - **`PushZentrale/`** (PUSHZ, Gerät): Pushbenachrichtigungen – Empfänger (je Visualisierung), Nachrichten als Liste mit Dialog, Schalter je Nachricht und Empfänger, Verzögerung/Wiederholung (Formular in `libs/PushForm.php`, Versand in `libs/PushOutputs.php`).
 - **`EchoMuseGateway/`** (EMGW, Splitter auf einem Server Socket): Gerätelink der EchoMuse-Firmware, Freigabe, Wiedergabe, Sprachrunden-Vermittlung (Traits `libs/EmGateway*.php`).
 - **`EchoMuseGeraet/`** (EMGD): ein Dot mit Variablen und `SpeakFile`, `Beep`, `PlayCue`, `SendConfig`.
@@ -20,7 +19,7 @@ Projektwissen (Entscheidungen, Protokoll-Eigenheiten, Test-Rezepte): **`.claude/
 
 ```bash
 php tests/echomuse_lib_test.php   # reine Bausteine, ohne Symcon
-php tests/smoke_test.php          # Zentrale, Ansage und Push Zentrale im Prüfstand-Kernel
+php tests/smoke_test.php          # Sprachausgabe Zentrale (Ansageliste) und Push Zentrale im Prüfstand-Kernel
 php tests/echomuse_test.php       # Gateway, Gerät, Voice mit Attrappen-Dot
 php -l <Datei>
 ```

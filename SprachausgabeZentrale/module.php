@@ -7,10 +7,9 @@ require_once __DIR__ . '/../libs/SpeechAiStore.php';
 require_once __DIR__ . '/../libs/SpeechAnnouncements.php';
 
 /**
- * Sprachausgabe Zentrale: kennt die Ausgabegeräte, die globalen Schalter (Hauptschalter,
+ * Sprachausgabe Zentrale (Gerät): kennt die Ausgabegeräte, die globalen Schalter (Hauptschalter,
  * Ruhemodus, Lautstärke), die Ansagen (Liste, Trait SpeechAnnouncements) und die Warteschlange.
- * Ansagen kommen aus der eigenen Liste, aus Skripten (SPAZ_Speak) oder von alten
- * Ansage-Instanzen (ForwardData, bis sie per SPAZ_ImportAnnouncements übernommen sind). Gesprochen wird über einen Timer, nicht im
+ * Ansagen kommen aus der eigenen Liste oder aus Skripten (SPAZ_Speak). Gesprochen wird über einen Timer, nicht im
  * Thread des Auslösers: Echo-Aufrufe gehen in die Cloud und dürfen den Auslöser nicht aufhalten.
  */
 class SprachausgabeZentrale extends IPSModuleStrict
@@ -18,7 +17,6 @@ class SprachausgabeZentrale extends IPSModuleStrict
     use SpeechAiStore;
     use SpeechAnnouncements;
 
-    private const DATA_TX = '{4942173C-5F03-4B89-835D-D3698A337C2D}';
     private const QUEUE_MAX = 20;
 
     public function Create(): void
@@ -97,6 +95,10 @@ class SprachausgabeZentrale extends IPSModuleStrict
 
     public function RequestAction(string $Ident, mixed $Value): void
     {
+        if (str_starts_with($Ident, 'A_')) {
+            $this->SetValue($Ident, (bool)$Value); // switch of one announcement
+            return;
+        }
         switch ($Ident) {
             case 'MASTER':
             case 'QUIET':
@@ -107,28 +109,6 @@ class SprachausgabeZentrale extends IPSModuleStrict
                 return;
         }
         throw new Exception($this->Translate('Unknown action') . ': ' . $Ident);
-    }
-
-    /** Ansagen der Kind-Instanzen ("Speak") und die Geräteliste für deren Formular ("Outputs"). */
-    public function ForwardData(string $JSONString): string
-    {
-        $data = json_decode($JSONString, true);
-        if (!is_array($data) || ($data['DataID'] ?? '') !== self::DATA_TX) {
-            return '';
-        }
-        switch ((string)($data['Action'] ?? '')) {
-            case 'Outputs':
-                return (string)json_encode(array_column($this->outputs(), 'name'), JSON_UNESCAPED_UNICODE);
-            case 'Speak':
-                return $this->enqueue(
-                    (string)($data['Text'] ?? ''),
-                    array_map('strval', (array)($data['Targets'] ?? [])),
-                    (int)($data['Volume'] ?? 0),
-                    (bool)($data['Urgent'] ?? false),
-                    (string)($data['Key'] ?? '')
-                );
-        }
-        return '';
     }
 
     /**
@@ -188,19 +168,11 @@ class SprachausgabeZentrale extends IPSModuleStrict
             $typeOptions[] = ['caption' => $this->Translate('type:' . $type), 'value' => $type];
         }
         $names = array_column($this->outputs(), 'name');
-        $legacy = 0;
-        foreach (IPS_GetInstanceListByModuleID(self::ANN_GUID) as $inst) {
-            $legacy += IPS_GetInstance($inst)['ConnectionID'] === $this->InstanceID ? 1 : 0;
-        }
         return (string)json_encode([
             'elements' => [
                 $this->annFormList(),
                 $this->annScheduleButtons(),
-                ['type' => 'RowLayout', 'visible' => $legacy > 0, 'items' => [
-                    ['type' => 'Label', 'caption' => sprintf($this->Translate('%d announcement instances are still connected to this hub.'), $legacy)],
-                    ['type' => 'Button', 'caption' => 'Import them into the list', 'onClick' => 'echo SPAZ_ImportAnnouncements($id);',
-                        'confirm' => 'The announcement instances are deleted after the import. Continue?'],
-                ]],
+                ['type' => 'Label', 'caption' => 'Each announcement has a switch variable below this instance (for the visualization); Active in the list switches it off for good.'],
                 ['type' => 'ExpansionPanel', 'caption' => 'Outputs', 'items' => [
                 ['type' => 'List', 'name' => 'Outputs', 'caption' => 'Outputs', 'add' => true, 'delete' => true, 'rowCount' => 6,
                     'columns' => [

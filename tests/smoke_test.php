@@ -59,7 +59,6 @@ function GetValueFormatted(int $id): string
 Kernel::reset();
 Kernel::loadLibrary(dirname(__DIR__));
 const HUB = '{8DF4B1D9-E589-452D-BE37-8EC5DEF4CF13}';
-const ANN = '{94CE47EF-0417-49FB-9DE9-6B292F709A06}';
 Kernel::registerModule(['ModuleID' => '{00000000-0000-0000-0000-0000000000E0}', 'ModuleName' => 'Geräte-Attrappe', 'ModuleType' => 3]);
 $echo = Kernel::createInstance('{00000000-0000-0000-0000-0000000000E0}'); // stands in for an Echo instance: only its ID matters
 $fully = Kernel::createInstance('{00000000-0000-0000-0000-0000000000E0}');
@@ -139,108 +138,18 @@ SPAZ_Speak($hub, 'Variable', 'Log', 0);
 Kernel::advance(1);
 check(($taken()[0][3] ?? null) === 60, 'Lautstärke-Variable des Geräts schlägt den festen Wert');
 
-section('Ansage: Auslöser „Wert gleich“');
-$wm = IPS_CreateVariable(VARIABLETYPE_STRING);
-IPS_SetName($wm, 'Betriebsstatus');
-SetValue($wm, 'Run');
-$a = Kernel::createInstance(ANN);
-check(Kernel::$instances[$a]['connection'] === $hub, 'verbindet sich mit der Zentrale');
-check(IPS_GetInstance($a)['InstanceStatus'] === 201, 'ohne Text: Status 201');
-IPS_SetProperty($a, 'TriggerVariable', $wm);
-IPS_SetProperty($a, 'TriggerRule', SpeechTrigger::EQUALS);
-IPS_SetProperty($a, 'TriggerValue', 'Finished');
-IPS_SetProperty($a, 'Texts', "Die Waschmaschine ist fertig ({value}).");
-IPS_ApplyChanges($a);
-Kernel::advance(1); // the conversion of the old trigger applies again via timer
-check(IPS_GetInstance($a)['InstanceStatus'] === IS_ACTIVE && World::value($a, 'ACTIVE') === true, 'aktiv, Schalter an');
-$fire($wm, 'Pause');
-Kernel::advance(1);
-check($taken() === [], 'anderer Wert: nichts');
-$fire($wm, 'Finished');
-Kernel::advance(1);
-check($taken() === [['echo', $echo, 'Die Waschmaschine ist fertig (Finished).', 40]], 'Wechsel auf Finished: Ansage mit Platzhalter');
-check(World::value($a, 'LAST_RUN') > 0, 'Letzte Ansage der Instanz gesetzt');
-Kernel::advance(60);
-$fire($wm, 'Finished');
-Kernel::advance(1);
-check($taken() === [], 'gleicher Wert erneut ohne „auch bei Wiederholung“: nichts');
-
-section('Ansage: Grenzwert, Ziele, Bedingung, Aktiv');
-$t = IPS_CreateVariable(VARIABLETYPE_FLOAT);
-IPS_SetName($t, 'Füllstand');
-SetValue($t, 10.0);
-$b = Kernel::createInstance(ANN);
-IPS_SetProperty($b, 'TriggerVariable', $t);
-IPS_SetProperty($b, 'TriggerRule', SpeechTrigger::ABOVE);
-IPS_SetProperty($b, 'TriggerValue', '80');
-IPS_SetProperty($b, 'Texts', "Badewanne voll: {value} ({name}).\nBadewanne voll: {value} ({name}).");
-IPS_SetProperty($b, 'Targets', json_encode([['name' => 'Tablet', 'use' => true], ['name' => 'Küche', 'use' => false]]));
-IPS_SetProperty($b, 'Condition', 'BAD');
-IPS_ApplyChanges($b);
-Kernel::advance(1);
-$GLOBALS['conditions']['BAD'] = false;
-$fire($t, 85.0);
-Kernel::advance(1);
-check($taken() === [], 'Bedingung nicht erfüllt: nichts');
-$GLOBALS['conditions']['BAD'] = true;
-$fire($t, 50.0);
-$fire($t, 90.0);
-Kernel::advance(1);
-check($taken() === [['fully', $fully, 'Badewanne voll: 90,0 (Füllstand).', 0]], 'Überschreiten von 80: nur auf dem angehakten Tablet');
-$fire($t, 95.0);
-Kernel::advance(40);
-check($taken() === [], 'weiter über der Grenze: kein zweites Mal');
-RequestAction(World::varId($b, 'ACTIVE'), false);
-$fire($t, 50.0);
-$fire($t, 99.0);
-Kernel::advance(1);
-check($taken() === [], 'Ansage deaktiviert: nichts');
-
-section('Testknopf und Formulare');
-$out = SPAA_Test($b);
-Kernel::advance(1);
-check(str_contains($out, 'Gesendet') && count($taken()) === 1, 'Test spricht trotz deaktivierter Ansage: ' . trim($out));
-$formA = json_decode(Kernel::$instances[$b]["object"]->GetConfigurationForm(), true);
-$targets = null;
-foreach ($formA['elements'] as $el) {
-    if (($el['name'] ?? '') === 'Targets') {
-        $targets = $el;
-    }
-}
-check(is_array($targets) && array_column($targets['values'], 'name') === ['Küche', 'Flur', 'Tablet', 'Log']
-    && $targets['values'][2]['use'] === true && $targets['columns'][0]['save'] === true,
-    'Zielliste aus den Geräten der Zentrale, Häkchen übernommen, Namensspalte mit save');
-check(is_array(json_decode(Kernel::$instances[$hub]["object"]->GetConfigurationForm(), true)), 'Formular der Zentrale ist gültiges JSON');
-
-section('Auslöser im Bedingungs-Dialog: Übernahme alter Instanzen');
-$conv = SpeechTrigger::rule(IPS_GetProperty($a, 'TriggerCondition'));
-check(IPS_GetProperty($a, 'TriggerVariable') === 0 && $conv !== null && $conv['variableID'] === $wm && $conv['comparison'] === 0 && $conv['value'] === 'Finished'
-    && IPS_GetProperty($a, 'TriggerMode') === SpeechTrigger::MODE_BECOMES, 'Ansage „Wert gleich Finished“ wurde zur Regel „= Finished, wenn erfüllt“');
-$conv = SpeechTrigger::rule(IPS_GetProperty($b, 'TriggerCondition'));
-check($conv !== null && $conv['comparison'] === 2 && $conv['value'] == 80, 'Ansage „über Grenzwert 80“ wurde zur Regel „> 80“');
-$bv = IPS_CreateVariable(VARIABLETYPE_BOOLEAN);
-$c = Kernel::createInstance(ANN);
-IPS_SetProperty($c, 'TriggerCondition', SpeechTrigger::ruleJson($bv, 0, true));
-IPS_SetProperty($c, 'Texts', 'Tür offen');
-IPS_ApplyChanges($c);
-$GLOBALS['calls'] = [];
-$fire($bv, true);
-Kernel::advance(1);
-check(count($taken()) === 1, 'neue Regel „= true“: beim Übergang gesprochen');
-$fire($bv, true);
-Kernel::advance(40);
-check($taken() === [], 'gleicher Wert erneut: nichts (wenn die Regel erfüllt wird)');
-IPS_SetProperty($c, 'TriggerMode', SpeechTrigger::MODE_WHILE);
-IPS_ApplyChanges($c);
-IPS_SetProperty($hub, 'Cooldown', 0); // the modules use the wall clock, the kernel clock does not move it
-IPS_ApplyChanges($hub);
-$fire($bv, true);
-Kernel::advance(40);
-$fire($bv, true);
-Kernel::advance(40);
-check(count($taken()) === 2, 'Auslöse-Art „solange erfüllt“: jede Aktualisierung');
-IPS_SetProperty($hub, 'Cooldown', 30);
-IPS_ApplyChanges($hub);
+section('Auslöser: Regel aus dem Bedingungs-Dialog');
+$rv = IPS_CreateVariable(VARIABLETYPE_STRING);
+$rule = SpeechTrigger::rule(SpeechTrigger::ruleJson($rv, 0, 'Finished'));
+check($rule !== null && $rule['variableID'] === $rv && SpeechTrigger::passes($rule, 'Finished') && !SpeechTrigger::passes($rule, 'Run'), 'Regel „= Finished“');
+check(SpeechTrigger::firesRule(SpeechTrigger::MODE_BECOMES, $rule, 'Finished', true, 'Run') && !SpeechTrigger::firesRule(SpeechTrigger::MODE_BECOMES, $rule, 'Finished', false, 'Finished'),
+    '„wenn erfüllt“: nur beim Übergang');
+check(SpeechTrigger::firesRule(SpeechTrigger::MODE_WHILE, $rule, 'Finished', false, 'Finished') && SpeechTrigger::firesRule(SpeechTrigger::MODE_ANY_UPDATE, $rule, 'x', false, 'x')
+    && !SpeechTrigger::firesRule(SpeechTrigger::MODE_ANY_CHANGE, $rule, 'x', false, 'x'), '„solange erfüllt“, „jede Aktualisierung“, „jede Änderung“');
+$fv = IPS_CreateVariable(VARIABLETYPE_FLOAT);
+$legacy = SpeechTrigger::legacyToCondition($fv, SpeechTrigger::ABOVE, '80', false, VARIABLETYPE_FLOAT);
+$lr = SpeechTrigger::rule($legacy['condition']);
+check($lr['comparison'] === 2 && $lr['value'] == 80 && $legacy['mode'] === SpeechTrigger::MODE_BECOMES, 'altes Format „über Grenzwert 80“ wird zu „> 80, wenn erfüllt“');
 check(SpeechTrigger::passes(['comparison' => 5, 'value' => 12, 'type' => 0], 12.0) && !SpeechTrigger::passes(['comparison' => 2, 'value' => 12, 'type' => 0], 'x'),
     '≤ vergleicht Zahlen, > mit Text ist nie erfüllt');
 
@@ -346,9 +255,6 @@ $out = PUSHZ_TestMessage($ph, 'T', 'Test', 0, '', 'Alert', '', 0);
 check(str_contains($out, 'Gesendet') && count($pushed()) === 2, 'Test im Dialog sendet an alle, auch innerhalb der Sperrfrist: ' . trim($out));
 $form = json_decode(Kernel::$instances[$ph]['object']->GetConfigurationForm(), true);
 check(is_array($form) && ($form['elements'][0]['type'] ?? '') === 'List' && is_array($form['elements'][0]['form'] ?? null), 'Formular: Nachrichtenliste mit eigenem Bearbeiten-Dialog');
-$out = SPAA_Preview($b, "A {value}\nB {name}", SpeechTrigger::ruleJson($t, 2, 80));
-check($out === "• A 99,0\n• B Füllstand", 'Ansage-Vorschau zeigt jede Variante: ' . str_replace("\n", ' | ', $out));
-check(str_contains(SPAA_Preview($b, '', ''), 'Kein Text'), 'Vorschau ohne Text nennt das');
 
 section('Ansagen als Liste in der Zentrale');
 $hl = Kernel::createInstance(HUB);
@@ -380,6 +286,15 @@ $fire($tub, 90.0);
 Kernel::advance(1);
 check($taken() === [['fully', $fully, 'Wanne voll: 90,0', 0]], 'Grenzwert überschritten: nur auf dem angehakten Tablet');
 $ev = @IPS_GetObjectIDByIdent('ANNTIME_' . $annRows[1]['annId'], $hl);
+$sw = World::varId($hl, 'A_' . $annRows[0]['annId']);
+check($sw > 0 && GetValue($sw) === true && IPS_GetName($sw) === 'Wäsche' && World::variable($hl, 'A_' . $annRows[0]['annId'])['presentation'] !== [],
+    'je Ansage eine Schaltvariable unter der Zentrale (neu = an, Name der Ansage, Darstellung)');
+RequestAction($sw, false);
+$fire($wash, 'Run');
+$fire($wash, 'Finished');
+Kernel::advance(1);
+check($taken() === [], 'Schaltvariable aus: Ansage schweigt');
+RequestAction($sw, true);
 check(is_int($ev) && $ev > 0 && $GLOBALS['events'][$ev]['time'] === [6, 30, 0] && $GLOBALS['events'][$ev]['active'] === true
     && str_contains($GLOBALS['events'][$ev]['script'], "SPAZ_TriggerAnnouncement($hl, '" . $annRows[1]['annId'] . "')"), 'täglicher Zeitauslöser als Ereignis unter der Zentrale (06:30, ruft die Ansage per Kennung)');
 check(SPAZ_TriggerAnnouncement($hl, 'Wanne') === '' && SPAZ_TriggerAnnouncement($hl, 'gibtsnicht') === 'unknown announcement', 'SPAZ_TriggerAnnouncement nach Name');
@@ -445,41 +360,6 @@ $annRows[0]['Schedule'] = 0;
 IPS_SetProperty($hl, 'Announcements', json_encode($annRows));
 IPS_ApplyChanges($hl);
 check(!is_int(@IPS_GetObjectIDByIdent('ANNSCHED_' . $annRows[0]['annId'], $hl)) && is_int(@IPS_GetObjectIDByIdent('SCHEDULE_MAIN', $hl)), 'kein Zeitplan mehr: eigener Plan wird gelöscht, die Sprechzeiten bleiben');
-
-section('Ansage-Instanzen in die Liste übernehmen');
-$hi = Kernel::createInstance(HUB);
-IPS_SetProperty($hi, 'Outputs', json_encode([['name' => 'Küche', 'type' => 'echo_speak', 'instance' => $echo, 'script' => 0, 'volume' => 40, 'default' => true],
-    ['name' => 'Flur', 'type' => 'echo_announce', 'instance' => $echo, 'script' => 0, 'volume' => 0, 'default' => false]]));
-IPS_SetProperty($hi, 'Cooldown', 0);
-IPS_ApplyChanges($hi);
-$old = Kernel::createInstance(ANN);
-IPS_DisconnectInstance($old);
-IPS_ConnectInstance($old, $hi);
-IPS_SetName($old, 'Rauchmelder');
-$smoke = IPS_CreateVariable(VARIABLETYPE_BOOLEAN);
-IPS_SetProperty($old, 'TriggerVariable', $smoke); // old format: converted by the import
-IPS_SetProperty($old, 'TriggerRule', SpeechTrigger::EQUALS);
-IPS_SetProperty($old, 'TriggerValue', 'true');
-IPS_SetProperty($old, 'Texts', 'Feuer!');
-IPS_SetProperty($old, 'Urgent', true);
-IPS_SetProperty($old, 'Targets', json_encode([['name' => 'Flur', 'use' => true]]));
-IPS_ApplyChanges($old);
-Kernel::advance(1);
-RequestAction(World::varId($old, 'ACTIVE'), false);
-$report = SPAZ_ImportAnnouncements($hi);
-Kernel::advance(1);
-$imp = json_decode(IPS_GetProperty($hi, 'Announcements'), true);
-check(!IPS_InstanceExists($old) && count($imp) === 1 && $imp[0]['name'] === 'Rauchmelder' && $imp[0]['Urgent'] === true && $imp[0]['active'] === false
-    && ($imp[0]['T_' . substr(md5('flur'), 0, 6)] ?? false) === true && SpeechTrigger::rule($imp[0]['TriggerCondition'])['variableID'] === $smoke,
-    'Instanz übernommen (Name, Dringend, Aktiv, Ziel, Auslöser) und gelöscht: ' . str_replace("\n", ' | ', $report));
-$imp[0]['active'] = true;
-IPS_SetProperty($hi, 'Announcements', json_encode($imp));
-IPS_ApplyChanges($hi);
-Kernel::advance(1);
-$GLOBALS['calls'] = [];
-$fire($smoke, true);
-Kernel::advance(1);
-check($taken() === [['announce', $echo, 'Feuer!', 0]], 'übernommene Ansage spricht auf ihrem Ziel');
 
 section('KI-Stimme: alle fünf Anbieter (Netz als Attrappe)');
 $GLOBALS['http'] = [];

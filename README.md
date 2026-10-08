@@ -21,7 +21,7 @@ Ansagen und Pushbenachrichtigungen für Symcon: ein Auslöser, eine Bedingung, e
 - **Pushbenachrichtigungen** (Push Zentrale): Nachrichten als Liste mit eigenem Dialog, Kachel-Visualisierung (mit Icon, Ton, Ziel beim Antippen) oder WebFront, Schalter je Nachricht und Person, Verzögerung („erst nach 60 min offen“) und Wiederholung, Text aus Skript.
 - **Bedingungen** mit Symcons eigenem Bedingungs-Editor: Anwesenheit, Zeitfenster, Wochentage, beliebige Variablen.
 - **Texte** mit Varianten (eine je Zeile, zufällig gewählt) und Platzhaltern: `{value}`, `{old}`, `{name}`, `{var:12345}`, `{time}`, `{date}`.
-- **Zentral schaltbar:** Hauptschalter, Ruhemodus, Lautstärke in Prozent, je Ansage ein Aktiv-Schalter. „Dringende“ Ansagen (z. B. Rauchmelder) sprechen immer.
+- **Zentral schaltbar:** Hauptschalter, Ruhemodus, Lautstärke in Prozent, je Ansage ein Schalter unter der Zentrale (einfach in die Visu zu verlinken). „Dringende“ Ansagen (z. B. Rauchmelder) sprechen immer.
 - **Warteschlange:** Ansagen überlappen nicht; dieselbe Ansage kommt innerhalb einer Sperrfrist nur einmal.
 
 ## 2. Voraussetzungen
@@ -31,8 +31,7 @@ Ansagen und Pushbenachrichtigungen für Symcon: ein Auslöser, eine Bedingung, e
 
 ## 3. Enthaltene Module
 
-- **Sprachausgabe Zentrale** (Splitter, Präfix `SPAZ`): Ansagen (Liste mit Dialog: Auslöser, täglich um, Text, Ausgabegeräte, Lautstärke, Dringend, Bedingung), Ausgabegeräte, globale Bedingung, Sperrfrist, Variablen Sprachausgabe, Ruhemodus, Lautstärke, Letzte Ansage.
-- **Sprachausgabe Ansage** (Gerät, Präfix `SPAA`): **veraltet** – eine Instanz je Ansage. Bestehende Instanzen laufen weiter; in der Zentrale übernimmt „In die Liste übernehmen“ sie in die Ansageliste und löscht sie.
+- **Sprachausgabe Zentrale** (Gerät, Präfix `SPAZ`): Ansagen (Liste mit Dialog: Auslöser, täglich um, Text, Ausgabegeräte, Lautstärke, Dringend, Bedingung), Ausgabegeräte, globale Bedingung, Sperrfrist, Variablen Sprachausgabe, Ruhemodus, Lautstärke, Letzte Ansage und je Ansage ein Schalter (für die Visualisierung).
 - **Push Zentrale** (Gerät, Präfix `PUSHZ`): Empfänger, Nachrichtenliste, globale Bedingung, Sperrfrist; Variablen Benachrichtigungen (Hauptschalter), Letzte Benachrichtigung und je Nachricht und Empfänger ein Schalter.
 
 ## 4. Einrichten
@@ -78,7 +77,6 @@ Ablauf: `oww_wake` → `listen_ack` → Mikrofon (0x07) → Voice → `speech_st
 SPAZ_Speak(int $ZentraleID, string $Text, string $Ziele, int $Lautstaerke): string
 SPAZ_SpeakUrgent(int $ZentraleID, string $Text, string $Ziele, int $Lautstaerke): string
 SPAZ_TriggerAnnouncement(int $ZentraleID, string $AnsageName): string
-SPAZ_ImportAnnouncements(int $ZentraleID): string
 PUSHZ_Trigger(int $PushZentraleID, string $NachrichtName): string
 PUSHZ_Send(int $PushZentraleID, string $Titel, string $Text, string $Empfaenger): string
 ```

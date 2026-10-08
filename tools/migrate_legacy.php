@@ -11,9 +11,8 @@ declare(strict_types=1);
  *  - Zentrale in der Kategorie, Ausgabegerät aus der Echo-Kennung der Skripte, Lautstärke über
  *    die bisherige Lautstärke-Variable, globale Bedingung aus den Regeln, die ALLE Ansagen teilen
  *    (z. B. Jemand anwesend, Hauptschalter) — die alten Schalter bleiben in der Visu wirksam;
- *  - je Altansage eine Ansage (Auslöser, Wert, Wiederholung, Text, übrige Bedingungen, Aktiv =
- *    Ereignis war aktiv); seit 10/2026 zuerst als Instanz, die SPAZ_ImportAnnouncements am Ende in
- *    die Ansageliste der Zentrale übernimmt;
+ *  - je Altansage eine Zeile der Ansageliste der Zentrale (Auslöser, Wert, Wiederholung, Text,
+ *    übrige Bedingungen); ihre Schaltvariable unter der Zentrale = Ereignis war aktiv;
  *  - die alten Auslöser-Ereignisse werden DEAKTIVIERT, nicht gelöscht (Rückweg: wieder aktivieren).
  * Bedingungen, die auf Schalter oder Zeitpläne ANDERER Altansagen zeigen (kopierte Ereignisse),
  * werden auf die eigene Kategorie umgehängt oder gestrichen und im Bericht genannt.
@@ -23,7 +22,6 @@ declare(strict_types=1);
 const CATEGORY = 0;
 const DRY_RUN = true;
 const HUB_GUID = '{8DF4B1D9-E589-452D-BE37-8EC5DEF4CF13}';
-const ANN_GUID = '{94CE47EF-0417-49FB-9DE9-6B292F709A06}';
 
 if (CATEGORY <= 0 || !IPS_CategoryExists(CATEGORY)) {
     IPS_LogMessage('SPA-Migration', 'Bitte oben CATEGORY auf die Kategorie der alten Sprachausgaben setzen.');
@@ -177,6 +175,32 @@ if (!DRY_RUN) {
     IPS_SetProperty($hub, 'Cooldown', 30);
     IPS_ApplyChanges($hub);
 }
+// old trigger (Symcon event type, value as text) → rule of the condition dialog + trigger mode, as SpeechTrigger::legacyToCondition
+$toTrigger = static function (array $plan): array {
+    $var = (int)$plan['trigger'];
+    $type = @IPS_VariableExists($var) ? IPS_GetVariable($var)['VariableType'] : VARIABLETYPE_STRING;
+    $raw = (string)$plan['value'];
+    $typed = match ($type) {
+        VARIABLETYPE_BOOLEAN => in_array(mb_strtolower(trim($raw)), ['1', 'true', 'an', 'ein', 'on', 'ja', 'yes'], true),
+        VARIABLETYPE_INTEGER => (int)$raw,
+        VARIABLETYPE_FLOAT   => (float)$raw,
+        default              => $raw,
+    };
+    $current = @IPS_VariableExists($var) ? GetValue($var) : $typed;
+    $repeatMode = $plan['repeat'] ? 1 : 0;
+    [$cmp, $value, $mode] = match ((int)$plan['rule']) {
+        0 => [0, $current, 2],          // every update
+        1 => [0, $current, 3],          // every change
+        3 => [1, $typed, $repeatMode],  // differs
+        4 => [2, $typed, $repeatMode],  // above
+        5 => [4, $typed, $repeatMode],  // below
+        default => [0, $typed, $repeatMode],
+    };
+    return ['condition' => (string)json_encode([['id' => 0, 'parentID' => 0, 'operation' => 0, 'rules' => ['variable' => [
+        ['id' => 0, 'variableID' => $var, 'comparison' => $cmp, 'value' => $value, 'type' => 0]], 'date' => [], 'time' => [], 'dayOfTheWeek' => []]]]), 'mode' => $mode];
+};
+$listRows = [];
+$switchValues = [];
 foreach ($plans as $plan) {
     $own = array_diff_key($plan['rules'], array_flip($common));
     $row = [
@@ -192,30 +216,15 @@ foreach ($plans as $plan) {
     }
     if (!DRY_RUN) {
         if ($plan['text'] !== '') {
-            $ann = 0;
-            foreach (IPS_GetChildrenIDs($plan['entry']['category']) as $cid) {
-                if (IPS_InstanceExists($cid) && IPS_GetInstance($cid)['ModuleInfo']['ModuleID'] === ANN_GUID) {
-                    $ann = $cid;
-                }
-            }
-            if ($ann === 0) {
-                $ann = IPS_CreateInstance(ANN_GUID);
-                IPS_SetParent($ann, $plan['entry']['category']);
-            }
-            IPS_SetName($ann, 'Ansage ' . $plan['entry']['name']);
-            if (IPS_GetInstance($ann)['ConnectionID'] !== $hub) {
-                @IPS_DisconnectInstance($ann);
-                IPS_ConnectInstance($ann, $hub);
-            }
-            IPS_SetProperty($ann, 'TriggerVariable', $plan['trigger']);
-            IPS_SetProperty($ann, 'TriggerRule', $plan['rule']);
-            IPS_SetProperty($ann, 'TriggerValue', $plan['value']);
-            IPS_SetProperty($ann, 'Repeat', $plan['repeat']);
-            IPS_SetProperty($ann, 'Texts', $plan['text']);
-            IPS_SetProperty($ann, 'Condition', $toCondition($own));
-            IPS_ApplyChanges($ann);
-            RequestAction(IPS_GetObjectIDByIdent('ACTIVE', $ann), $plan['active']);
-            $row['instance'] = $ann;
+            $annId = substr(md5($plan['entry']['category'] . '|' . $plan['entry']['name']), 0, 8);
+            $listRows[] = [
+                'annId' => $annId, 'active' => true, 'name' => $plan['entry']['name'],
+                'TriggerCondition' => $toTrigger($plan)['condition'], 'TriggerMode' => $toTrigger($plan)['mode'],
+                'TimeEnabled' => false, 'Time' => '{"hour":7,"minute":0,"second":0}', 'Texts' => $plan['text'],
+                'Condition' => $toCondition($own), 'Volume' => 0, 'Urgent' => false, 'Schedule' => 0,
+            ];
+            $switchValues['A_' . $annId] = $plan['active'];
+            $row['list'] = $annId;
         } else {
             $code = IPS_GetScriptContent($plan['script']);
             $new = (string)preg_replace('/ECHOREMOTE_TextToSpeechVolume\(\s*[^,]+,\s*(\$\w+)\s*,\s*\$volume\s*\)/', 'SPAZ_Speak(' . $hub . ', $1, \'\', 0)', $code);
@@ -230,9 +239,18 @@ foreach ($plans as $plan) {
     }
     $report['announcements'][] = $row;
 }
-if (!DRY_RUN && $hub > 0) {
-    // since 10/2026 announcements are a list in the hub: move the instances just created into it
-    $report['list'] = SPAZ_ImportAnnouncements($hub);
+if (!DRY_RUN && $hub > 0 && $listRows !== []) {
+    // announcements are a list in the hub; each gets a switch variable A_<annId> (set from the old event's state)
+    $existingRows = json_decode(IPS_GetProperty($hub, 'Announcements'), true) ?: [];
+    IPS_SetProperty($hub, 'Announcements', json_encode(array_merge($existingRows, $listRows), JSON_UNESCAPED_UNICODE));
+    IPS_ApplyChanges($hub);
+    foreach ($switchValues as $ident => $on) {
+        $vid = @IPS_GetObjectIDByIdent($ident, $hub);
+        if (is_int($vid)) {
+            RequestAction($vid, $on);
+        }
+    }
+    $report['list'] = count($listRows) . ' Ansagen in der Liste der Zentrale';
 }
 IPS_LogMessage('SPA-Migration', json_encode($report, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 return json_encode($report, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

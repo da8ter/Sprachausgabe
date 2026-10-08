@@ -70,12 +70,6 @@
             "Text": "Text",
             "ID": "ID",
             "Active": "Aktiv",
-            "%d announcement instances are still connected to this hub.": "%d Ansage-Instanzen hängen noch an dieser Zentrale.",
-            "Import them into the list": "In die Liste übernehmen",
-            "The announcement instances are deleted after the import. Continue?": "Die Ansage-Instanzen werden nach der Übernahme gelöscht. Fortfahren?",
-            "No announcement instances found": "Keine Ansage-Instanzen gefunden",
-            "%d announcements imported": "%d Ansagen übernommen",
-            "instance could not be deleted": "Instanz konnte nicht gelöscht werden",
             "announcement is inactive": "Ansage ist deaktiviert",
             "unknown announcement": "unbekannte Ansage",
             "No text entered": "Kein Text eingetragen",
@@ -119,7 +113,9 @@
             "own": "eigener",
             "Each announcement uses no schedule, the shared speaking times or its own schedule (choose in its dialog). Outside \"Speak\" it stays silent; urgent announcements always speak.": "Jede Ansage nutzt keinen Zeitplan, die gemeinsamen Sprechzeiten oder einen eigenen Wochenplan (Auswahl im Dialog der Ansage). Außerhalb von „Sprechen“ schweigt sie; dringende Ansagen sprechen immer.",
             "Created on the next apply": "Wird beim nächsten Übernehmen angelegt",
-            "outside the schedule": "außerhalb des Zeitplans"
+            "outside the schedule": "außerhalb des Zeitplans",
+            "Each announcement has a switch variable below this instance (for the visualization); Active in the list switches it off for good.": "Jede Ansage hat eine Schaltvariable unterhalb dieser Instanz (für die Visualisierung); „Aktiv“ in der Liste schaltet sie dauerhaft ab.",
+            "announcement is switched off": "Ansage ist ausgeschaltet"
         }
     }
 }
