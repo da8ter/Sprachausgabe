@@ -1,6 +1,7 @@
 # Zentrale und Ansage
 
 Die **Zentrale** (`SprachausgabeZentrale`, SPAZ, **Gerät**) kennt die Ausgabegeräte, die globalen Schalter und alle **Ansagen als Liste** (Trait `libs/SpeechAnnouncements.php`). Das frühere Modul „Sprachausgabe Ansage“ (SPAA, Instanz je Ansage) ist seit 08.10.2026 entfernt; damit entfiel der Datenfluss, und die Zentrale ist kein Splitter mehr (Nutzerwunsch).
+- **Lautstärke-Variable je Ansage** (`V_<annId>`, 0–100 %, Darstellung Slider, 0 = Gerätestandard; Nutzerwunsch 08.10.2026): sie gilt beim Sprechen. Der Schieberegler im Dialog schreibt seinen Wert beim Übernehmen nur dann in die Variable, wenn er sich geändert hat (gemerkt im Attribut `AnnVolumeApplied`) – sonst bliebe ein in der Visu verstellter Wert nicht stehen.
 - **Schaltvariable je Ansage** (`A_<annId>`, Name = Ansage, neu = an) unter der Zentrale – wie bei der Push Zentrale, damit sie sich einfach in die Visualisierung legen lässt. Aus = die Ansage schweigt, auch wenn sie dringend ist; „Aktiv“ in der Liste schaltet sie dauerhaft ab.
 
 ## Entscheidungen

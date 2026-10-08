@@ -295,6 +295,22 @@ $fire($wash, 'Finished');
 Kernel::advance(1);
 check($taken() === [], 'Schaltvariable aus: Ansage schweigt');
 RequestAction($sw, true);
+$vol = World::varId($hl, 'V_' . $annRows[0]['annId']);
+check($vol > 0 && GetValue($vol) === 0 && IPS_GetName($vol) === 'Wäsche – Lautstärke' && World::variable($hl, 'V_' . $annRows[0]['annId'])['presentation'] !== [],
+    'je Ansage eine Lautstärke-Variable (Startwert aus dem Dialog, Darstellung Slider)');
+RequestAction($vol, 70);
+$fire($wash, 'Run');
+$fire($wash, 'Finished');
+Kernel::advance(1);
+check($taken() === [['echo', $echo, 'Die Waschmaschine ist fertig', 70]], 'Lautstärke aus der Variable (in der Visu verstellt)');
+$tmp = json_decode(IPS_GetProperty($hl, 'Announcements'), true);
+IPS_ApplyChanges($hl);
+check(GetValue($vol) === 70, 'erneutes Übernehmen ohne Änderung im Dialog lässt den Visu-Wert stehen');
+$tmp[0]['Volume'] = 30;
+IPS_SetProperty($hl, 'Announcements', json_encode($tmp));
+IPS_ApplyChanges($hl);
+check(GetValue($vol) === 30, 'neuer Wert im Dialog-Slider wird beim Übernehmen in die Variable geschrieben');
+RequestAction($vol, 0);
 check(is_int($ev) && $ev > 0 && $GLOBALS['events'][$ev]['time'] === [6, 30, 0] && $GLOBALS['events'][$ev]['active'] === true
     && str_contains($GLOBALS['events'][$ev]['script'], "SPAZ_TriggerAnnouncement($hl, '" . $annRows[1]['annId'] . "')"), 'täglicher Zeitauslöser als Ereignis unter der Zentrale (06:30, ruft die Ansage per Kennung)');
 check(SPAZ_TriggerAnnouncement($hl, 'Wanne') === '' && SPAZ_TriggerAnnouncement($hl, 'gibtsnicht') === 'unknown announcement', 'SPAZ_TriggerAnnouncement nach Name');

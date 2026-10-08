@@ -10,8 +10,10 @@ require_once __DIR__ . '/SpeechSchedule.php';
  * Ansagen als Liste in der Sprachausgabe Zentrale (Nutzerentscheid 08.10.2026, ersetzt die
  * Instanz je Ansage). Jede Zeile: Name, Aktiv, Auslöser aus dem Bedingungs-Dialog, optional
  * täglich zu einer Uhrzeit, Textvarianten, Bedingung, Ausgabegeräte (ein Häkchen je Gerät der
- * Zentrale, keins = Standardgeräte), Lautstärke, Dringend, Zeitplan. Je Ansage gibt es eine
- * Schaltvariable unter der Zentrale (Ident A_<annId>) für die Visualisierung. Gesprochen wird über
+ * Zentrale, keins = Standardgeräte), Lautstärke, Dringend, Zeitplan. Je Ansage gibt es unter der
+ * Zentrale eine Schaltvariable (A_<annId>) und eine Lautstärke-Variable (V_<annId>, 0 = Gerätestandard)
+ * für die Visualisierung; die Lautstärke aus dem Dialog wird beim Übernehmen in die Variable geschrieben,
+ * sobald sie sich dort ändert. Gesprochen wird über
  * enqueue() der Zentrale, die Hauptschalter, Ruhemodus, Bedingung, Sperrfrist und Warteschlange kennt.
  *
  * Erwartet von der Klasse: enqueue(), outputs(), conditionPassing(), Translate().
@@ -30,6 +32,7 @@ trait SpeechAnnouncements
     {
         $this->RegisterPropertyString('Announcements', '[]');
         $this->RegisterAttributeString('AnnSwitchIdents', '[]');
+        $this->RegisterAttributeString('AnnVolumeApplied', '{}');
         // Symcon rejects IPS_ApplyChanges of the own instance inside ApplyChanges (re-entrant): apply again via timer
         $this->RegisterTimer('Reapply', 0, 'IPS_ApplyChanges($_IPS[\'TARGET\']);');
     }
@@ -162,7 +165,7 @@ trait SpeechAnnouncements
                 ]],
                 ['type' => 'ExpansionPanel', 'caption' => 'Outputs (none ticked = default outputs)', 'items' => $targetBoxes ?: [['type' => 'Label', 'caption' => 'No outputs yet']]],
                 ['type' => 'RowLayout', 'items' => [
-                    ['type' => 'NumberSpinner', 'name' => 'Volume', 'caption' => 'Volume (0 = output default)', 'minimum' => 0, 'maximum' => 100, 'suffix' => ' %', 'value' => 0],
+                    ['type' => 'HorizontalSlider', 'name' => 'Volume', 'caption' => 'Volume (0 = output default)', 'minimum' => 0, 'maximum' => 100, 'stepSize' => 5, 'suffix' => ' %', 'displayValue' => true, 'value' => 0],
                     ['type' => 'CheckBox', 'name' => 'Urgent', 'caption' => 'Urgent (ignores main switch, quiet mode and global condition)', 'value' => false],
                 ]],
                 ['type' => 'ExpansionPanel', 'caption' => 'Condition', 'items' => [
@@ -213,18 +216,43 @@ trait SpeechAnnouncements
                 $targets[] = (string)$o['name'];
             }
         }
-        $reason = $this->enqueue($text, $targets, (int)($row['Volume'] ?? 0), $test || (bool)($row['Urgent'] ?? false), $test ? '' : 'ann:' . $row['annId']);
+        $volId = @IPS_GetObjectIDByIdent('V_' . $row['annId'], $this->InstanceID);
+        $volume = is_int($volId) ? (int)GetValue($volId) : (int)($row['Volume'] ?? 0);
+        $reason = $this->enqueue($text, $targets, $volume, $test || (bool)($row['Urgent'] ?? false), $test ? '' : 'ann:' . $row['annId']);
         $this->SendDebug('Announcement', $row['name'] . ': ' . $text . ($reason !== '' ? ' — ' . $reason : ''), 0);
         return $reason;
     }
 
-    /** Je Ansage eine Schaltvariable (neu = an); umbenannte Ansagen benennen sie mit um. */
+    /** Je Ansage eine Schalt- und eine Lautstärke-Variable; umbenannte Ansagen benennen sie mit um. */
     private function annMaintainSwitches(): void
     {
         $old = json_decode($this->ReadAttributeString('AnnSwitchIdents'), true) ?: [];
+        $applied = json_decode($this->ReadAttributeString('AnnVolumeApplied'), true) ?: [];
         $now = [];
+        $appliedNow = [];
         $position = 100;
         foreach ($this->annRows() as $row) {
+            $volIdent = 'V_' . $row['annId'];
+            $volCaption = trim((string)$row['name']) . ' – ' . $this->Translate('Volume');
+            $volIsNew = !is_int(@IPS_GetObjectIDByIdent($volIdent, $this->InstanceID));
+            $this->MaintainVariable($volIdent, $volCaption, VARIABLETYPE_INTEGER, [
+                'PRESENTATION' => VARIABLE_PRESENTATION_SLIDER,
+                'ICON'         => 'Speaker',
+                'SUFFIX'       => ' %',
+                'MIN'          => 0,
+                'MAX'          => 100,
+                'STEP_SIZE'    => 5,
+            ], 1000 + $position, true);
+            $this->EnableAction($volIdent);
+            $volume = max(0, min(100, (int)($row['Volume'] ?? 0)));
+            if ($volIsNew || (int)($applied[$row['annId']] ?? -1) !== $volume) {
+                $this->SetValue($volIdent, $volume); // the dialog value changed (or is new): it wins over the visualization
+            }
+            if (!$volIsNew && IPS_GetName($this->GetIDForIdent($volIdent)) !== $volCaption) {
+                IPS_SetName($this->GetIDForIdent($volIdent), $volCaption);
+            }
+            $appliedNow[(string)$row['annId']] = $volume;
+            $now[] = $volIdent;
             $ident = 'A_' . $row['annId'];
             $caption = trim((string)$row['name']);
             $isNew = !is_int(@IPS_GetObjectIDByIdent($ident, $this->InstanceID));
@@ -242,9 +270,10 @@ trait SpeechAnnouncements
             $now[] = $ident;
         }
         foreach (array_diff($old, $now) as $gone) {
-            $this->MaintainVariable((string)$gone, '', VARIABLETYPE_BOOLEAN, [], 0, false);
+            $this->MaintainVariable((string)$gone, '', str_starts_with((string)$gone, 'V_') ? VARIABLETYPE_INTEGER : VARIABLETYPE_BOOLEAN, [], 0, false);
         }
         $this->WriteAttributeString('AnnSwitchIdents', (string)json_encode(array_values($now)));
+        $this->WriteAttributeString('AnnVolumeApplied', (string)json_encode($appliedNow));
     }
 
     private function annSwitchOn(array $row): bool

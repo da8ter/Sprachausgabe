@@ -99,6 +99,10 @@ class SprachausgabeZentrale extends IPSModuleStrict
             $this->SetValue($Ident, (bool)$Value); // switch of one announcement
             return;
         }
+        if (str_starts_with($Ident, 'V_')) {
+            $this->SetValue($Ident, max(0, min(100, (int)$Value))); // volume of one announcement
+            return;
+        }
         switch ($Ident) {
             case 'MASTER':
             case 'QUIET':

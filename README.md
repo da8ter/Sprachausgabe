@@ -31,7 +31,7 @@ Ansagen und Pushbenachrichtigungen für Symcon: ein Auslöser, eine Bedingung, e
 
 ## 3. Enthaltene Module
 
-- **Sprachausgabe Zentrale** (Gerät, Präfix `SPAZ`): Ansagen (Liste mit Dialog: Auslöser, täglich um, Text, Ausgabegeräte, Lautstärke, Dringend, Bedingung), Ausgabegeräte, globale Bedingung, Sperrfrist, Variablen Sprachausgabe, Ruhemodus, Lautstärke, Letzte Ansage und je Ansage ein Schalter (für die Visualisierung).
+- **Sprachausgabe Zentrale** (Gerät, Präfix `SPAZ`): Ansagen (Liste mit Dialog: Auslöser, täglich um, Text, Ausgabegeräte, Lautstärke, Dringend, Bedingung), Ausgabegeräte, globale Bedingung, Sperrfrist, Variablen Sprachausgabe, Ruhemodus, Lautstärke, Letzte Ansage und je Ansage ein Schalter und eine Lautstärke (für die Visualisierung).
 - **Push Zentrale** (Gerät, Präfix `PUSHZ`): Empfänger, Nachrichtenliste, globale Bedingung, Sperrfrist; Variablen Benachrichtigungen (Hauptschalter), Letzte Benachrichtigung und je Nachricht und Empfänger ein Schalter.
 
 ## 4. Einrichten
